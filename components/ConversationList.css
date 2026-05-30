@@ -1,0 +1,234 @@
+.conv-stack {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 1rem;
+}
+
+.conv-section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.conv-section--grow {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0.85rem 0.75rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+}
+
+.conv-section--discover {
+  flex-shrink: 0;
+}
+
+.conv-section__header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0 0.25rem 0.5rem;
+}
+
+.conv-section__title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.conv-section__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.3rem;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.conv-section__empty {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 8rem;
+  padding: 1rem 0.75rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.conv-section--grow .conv-bubbles {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+.conv-bubbles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  overflow-y: auto;
+  max-height: min(42vh, 360px);
+}
+
+.conv-section--discover .conv-bubbles {
+  max-height: min(28vh, 220px);
+}
+
+.conv-bubble {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.03);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition), transform var(--transition);
+}
+
+.conv-bubble:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.conv-bubble--active {
+  background: rgba(99, 102, 241, 0.14);
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: 0 4px 18px rgba(99, 102, 241, 0.12);
+}
+
+.conv-bubble--unread .conv-bubble__name {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.conv-bubble__avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+  color: white;
+  font-weight: 700;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.conv-bubble__avatar--discover {
+  background: linear-gradient(135deg, #059669, #10b981);
+}
+
+.conv-bubble__content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.conv-bubble__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.conv-bubble__name {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conv-bubble__time,
+.conv-bubble__live {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.conv-bubble__live {
+  color: var(--success);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.conv-bubble__preview-wrap {
+  display: flex;
+}
+
+.conv-bubble__preview {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0.35rem 0.65rem;
+  border-radius: 14px 14px 14px 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conv-bubble--active .conv-bubble__preview {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: rgba(99, 102, 241, 0.2);
+}
+
+.conv-bubble--discover .conv-bubble__preview {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.15);
+}
+
+.conv-bubble__badge {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.25rem;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  color: white;
+  font-size: 0.62rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (max-width: 820px) {
+  .conv-bubbles {
+    max-height: none;
+  }
+
+  .conv-section--discover .conv-bubbles {
+    max-height: none;
+  }
+}

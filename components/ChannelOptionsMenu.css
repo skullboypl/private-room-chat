@@ -1,0 +1,204 @@
+.channel-options-menu {
+  position: fixed;
+  z-index: 10050;
+  width: min(280px, calc(100vw - 16px));
+  background: var(--bg-elevated, #1e1e2e);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-md, 0 8px 32px rgba(0, 0, 0, 0.45));
+  overflow: hidden;
+  animation: channelOptionsIn 0.15s ease-out;
+}
+
+@keyframes channelOptionsIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.channel-options-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  font-size: 0.9rem;
+}
+
+.channel-options-header strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.channel-options-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #888);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 0.25rem;
+}
+
+.channel-options-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+}
+
+.channel-options-tabs button {
+  flex: 1;
+  padding: 0.45rem 0.25rem;
+  font-size: 0.72rem;
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #888);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.channel-options-tabs button.active {
+  color: var(--accent-hover, #7c9cff);
+  border-bottom-color: var(--accent, #6b8afd);
+}
+
+.channel-options-body {
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 0.65rem 0.75rem;
+}
+
+.channel-options-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.channel-options-label {
+  font-size: 0.75rem;
+  color: var(--text-muted, #888);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.channel-options-muted {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--text-muted, #888);
+}
+
+.channel-options-password-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.channel-options-password-row code {
+  flex: 1;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  background: var(--bg-input, rgba(0, 0, 0, 0.25));
+  border-radius: var(--radius-sm, 6px);
+  font-size: 0.8125rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.channel-options-password-row button {
+  flex-shrink: 0;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.75rem;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.15));
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--text-primary, #eee);
+  cursor: pointer;
+}
+
+.channel-options-media-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.35rem;
+}
+
+.channel-options-media-thumb {
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm, 6px);
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.channel-options-media-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.channel-options-users {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.channel-options-users li {
+  font-size: 0.875rem;
+  padding: 0.35rem 0.5rem;
+  background: var(--bg-input, rgba(0, 0, 0, 0.2));
+  border-radius: var(--radius-sm, 6px);
+}
+
+.channel-options-emoji-current {
+  font-size: 2rem;
+  text-align: center;
+  padding: 0.25rem;
+}
+
+.channel-options-emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.35rem;
+}
+
+.channel-options-emoji-grid button {
+  font-size: 1.35rem;
+  padding: 0.35rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-input, rgba(0, 0, 0, 0.2));
+  cursor: pointer;
+}
+
+.channel-options-emoji-grid button.active {
+  border-color: var(--accent, #6b8afd);
+  background: rgba(107, 138, 253, 0.15);
+}
+
+.chat-dock-toolbar-title-btn,
+.chat-header-title-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.chat-dock-toolbar-title-btn:hover,
+.chat-header-title-btn:hover {
+  color: var(--accent-hover, #7c9cff);
+}

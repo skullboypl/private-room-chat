@@ -1,0 +1,208 @@
+.message-input-form {
+  position: relative;
+  flex-shrink: 0;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-composer, rgba(20, 20, 28, 0.96));
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-top: 1px solid var(--border);
+}
+
+.message-input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.35rem;
+  padding: 0.5rem 0.75rem;
+  min-width: 0;
+  background: var(--bg-composer, rgba(20, 20, 28, 0.96));
+}
+
+.message-file-input {
+  display: none;
+}
+
+.message-input-addon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  margin-bottom: 1px;
+  background: rgba(255, 255, 255, 0.04);
+  border: none;
+  border-radius: var(--radius-full);
+  color: var(--accent-hover);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color var(--transition), background var(--transition), opacity var(--transition);
+}
+
+.message-input-addon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.message-input-addon:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.message-upload-error {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0.75rem;
+  font-size: 0.75rem;
+  color: #fca5a5;
+}
+
+.message-input-field {
+  flex: 1;
+  min-width: 0;
+  min-height: 22px;
+  max-height: 132px;
+  padding: 0.45rem 0.5rem;
+  margin: 0;
+  border: none !important;
+  background: var(--bg-input) !important;
+  box-shadow: none !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--text-primary);
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  font-family: inherit;
+  outline: none;
+  resize: none;
+  overflow-y: auto;
+  field-sizing: content;
+}
+
+.message-input-field:focus {
+  background: rgba(15, 15, 20, 0.75) !important;
+}
+
+.message-input-field::placeholder {
+  color: var(--text-muted);
+}
+
+.message-input-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  margin-bottom: 1px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform var(--transition), opacity var(--transition);
+}
+
+.message-input-action:hover {
+  transform: scale(1.06);
+}
+
+.message-input-action--send {
+  color: var(--accent-hover);
+}
+
+.message-input-action--send svg {
+  width: 22px;
+  height: 22px;
+}
+
+.message-input-action--like {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.message-input-action__emoji {
+  display: block;
+  transform: translateY(1px);
+}
+
+.emoji-picker-container {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0.75rem;
+  z-index: 100;
+  width: fit-content;
+  max-width: calc(100% - 1.5rem);
+  max-height: min(360px, 50dvh);
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+}
+
+.emoji-picker-container--below {
+  bottom: auto;
+  top: calc(100% + 8px);
+}
+
+.emoji-picker-container em-emoji-picker {
+  display: block;
+  height: var(--emoji-picker-height, 320px) !important;
+  max-height: 100% !important;
+}
+
+.message-input-form--compact .message-input-row {
+  padding: 0.4rem 0.5rem;
+  gap: 0.25rem;
+}
+
+.message-input-form--compact .message-input-field {
+  font-size: 0.875rem;
+  padding: 0.35rem 0.4rem;
+  min-height: 20px;
+  max-height: 108px;
+}
+
+.message-input-form--compact .message-input-addon,
+.message-input-form--compact .message-input-action {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+}
+
+.message-input-form--compact .message-input-addon svg,
+.message-input-form--compact .message-input-action--send svg {
+  width: 19px;
+  height: 19px;
+}
+
+.message-input-form--compact .message-input-action--like {
+  font-size: 1.2rem;
+}
+
+.message-input-form--compact .message-upload-error {
+  left: 0.5rem;
+  right: 0.5rem;
+  max-width: calc(100% - 1rem);
+}
+
+.message-input-form--compact .emoji-picker-container {
+  left: 0.5rem;
+  right: 0.5rem;
+  width: auto;
+  max-width: none;
+  max-height: min(260px, 45dvh);
+}
+
+.message-input-form--compact .emoji-picker-container em-emoji-picker {
+  width: 100% !important;
+}
+
+@media (max-width: 600px) {
+  .message-input-row {
+    padding: 0.45rem 0.6rem;
+    gap: 0.3rem;
+  }
+
+  .message-input-field {
+    font-size: 16px;
+  }
+}

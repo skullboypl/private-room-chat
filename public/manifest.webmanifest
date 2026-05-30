@@ -1,0 +1,27 @@
+{
+  "name": "Pokoje Czatu",
+  "short_name": "Czat",
+  "description": "Prywatne pokoje czatu z szyfrowaniem E2E",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0f0f14",
+  "theme_color": "#6366f1",
+  "lang": "pl",
+  "categories": ["social", "communication"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/og-image.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

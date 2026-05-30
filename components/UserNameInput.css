@@ -1,0 +1,106 @@
+.username-form--entry {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 480px;
+}
+
+.username-form--entry input {
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+}
+
+.username-form--entry .btn {
+  width: 100%;
+}
+
+.username-form.username-form--compact {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.username-form.username-form--compact input[type="text"] {
+  width: min(160px, 42vw);
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.username-form.username-form--compact .btn {
+  width: auto;
+  flex-shrink: 0;
+  padding: 0.5rem 0.875rem;
+}
+
+.username-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem 0.35rem 0.35rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.username-pill__avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.8rem;
+  color: white;
+  flex-shrink: 0;
+}
+
+.username-pill__name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.username-pill__edit {
+  padding: 0.25rem 0.625rem;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-full);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition);
+}
+
+.username-pill__edit:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.btn--sm {
+  padding: 0.5rem 0.875rem;
+  font-size: 0.8rem;
+}
+
+@media (max-width: 600px) {
+  .welcome-card {
+    padding: 2rem 1.25rem;
+  }
+
+  .username-pill__name {
+    max-width: 80px;
+  }
+}

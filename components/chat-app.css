@@ -1,0 +1,413 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 1.5rem;
+}
+
+.app--messenger-full,
+.app--messenger {
+  max-width: none;
+  padding: 0;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app--messenger-full > .fb-layout {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+}
+
+.app--messenger-full > .welcome {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+}
+
+.messenger-global-error {
+  position: fixed;
+  left: 50%;
+  bottom: 5rem;
+  transform: translateX(-50%);
+  z-index: 900;
+  max-width: min(90vw, 420px);
+  margin: 0;
+}
+
+.app--chat {
+  max-width: none;
+  padding: 0;
+  height: 100vh;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  animation: fadeInDown 0.5s ease;
+}
+
+.app-header__brand {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.app-header__brand h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.app-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+  color: white;
+  box-shadow: var(--shadow-glow);
+}
+
+.app-logo svg {
+  width: 58%;
+  height: 58%;
+}
+
+.welcome {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+}
+
+.welcome__body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 0;
+  width: 100%;
+  padding: 1.5rem 1rem;
+}
+
+.welcome-card {
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 2.5rem 2rem;
+  text-align: center;
+  background: var(--bg-card);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  animation: fadeInUp 0.5s ease;
+  flex-shrink: 0;
+}
+
+.welcome-card__logo {
+  margin: 0 auto 1.25rem;
+}
+
+.welcome-card__title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.35rem;
+  background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.welcome-card__tagline {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 1.25rem;
+}
+
+.welcome-card__text {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.7;
+  margin-bottom: 1.5rem;
+}
+
+.welcome-card .username-form--entry {
+  max-width: none;
+}
+
+.welcome-card .username-form--entry .btn {
+  width: 100%;
+}
+
+.welcome-card__placeholder {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.app-tagline {
+  margin-top: 0.15rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  animation: fadeInUp 0.5s ease 0.1s both;
+}
+
+.app-main--messenger {
+  gap: 0.85rem;
+  min-height: 0;
+  flex: 1;
+}
+
+.messenger-toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.messenger-toolbar__btn {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+}
+
+.messenger-error {
+  margin-top: 0;
+}
+
+.app-header--messenger {
+  margin-bottom: 1rem;
+}
+
+.home-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.card {
+  background: var(--bg-card);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  box-shadow: var(--shadow-md);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.card:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.app-footer {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+.app-footer p {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.app-main form:not(.username-form--compact),
+.welcome-card form:not(.username-form--compact),
+.username-form--entry {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.app-main input[type="text"],
+.app-main input[type="password"],
+.welcome-card input[type="text"],
+.username-form--entry input[type="text"] {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.app-main input[type="text"]::placeholder,
+.app-main input[type="password"]::placeholder,
+.welcome-card input[type="text"]::placeholder,
+.username-form--entry input[type="text"]::placeholder {
+  color: var(--text-muted);
+}
+
+.app-main input[type="text"]:focus,
+.app-main input[type="password"]:focus,
+.welcome-card input[type="text"]:focus,
+.username-form--entry input[type="text"]:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.75rem 1.25rem;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--transition), transform var(--transition), box-shadow var(--transition);
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn--primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
+  color: white;
+  box-shadow: 0 4px 16px var(--accent-glow);
+}
+
+.btn--primary:hover {
+  box-shadow: 0 6px 24px var(--accent-glow);
+  filter: brightness(1.08);
+}
+
+.btn--ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+}
+
+.btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.error-message {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+  margin-top: 0.75rem;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.section-title__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 0.4rem;
+  background: var(--accent-glow);
+  color: var(--accent-hover);
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.empty-state {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 1.5rem 1rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 720px) {
+  .app:not(.app--messenger-full):not(.app--messenger) {
+    padding: 1.25rem 1rem 1rem;
+  }
+
+  .app--messenger-full,
+  .app--messenger {
+    padding: 0;
+  }
+
+  .app-header {
+    flex-wrap: wrap;
+  }
+
+  .app-header__brand h1 {
+    font-size: 1.4rem;
+  }
+
+  .home-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .card {
+    padding: 1.25rem;
+  }
+}

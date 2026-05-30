@@ -1,0 +1,39 @@
+.app-lang-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.15rem;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+}
+
+.app-lang-switcher__btn {
+  padding: 0.28rem 0.55rem;
+  border: none;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition);
+}
+
+.app-lang-switcher__btn:hover {
+  color: var(--text-primary);
+}
+
+.app-lang-switcher__btn--active {
+  color: var(--text-primary);
+  background: rgba(99, 102, 241, 0.22);
+}
+
+.welcome-card .app-lang-switcher {
+  margin: 0 auto 0.85rem;
+}
+
+.fb-topbar__actions .app-lang-switcher,
+.messenger__toolbar .app-lang-switcher {
+  flex-shrink: 0;
+}

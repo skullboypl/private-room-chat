@@ -1,0 +1,62 @@
+.chat-share {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  position: relative;
+}
+
+.chat-share__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.65rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.chat-share__btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.chat-share__btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.chat-share__toast {
+  white-space: nowrap;
+  padding: 0.35rem 0.65rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  color: var(--success);
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
+}
+
+.chat-share__toast--fixed {
+  position: fixed;
+  z-index: 9999;
+  transform: translateX(-100%);
+}
+
+@media (max-width: 600px) {
+  .chat-share__label {
+    display: none;
+  }
+
+  .chat-share__btn {
+    padding: 0.35rem;
+    min-width: 1.75rem;
+    justify-content: center;
+  }
+}
