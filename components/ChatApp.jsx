@@ -162,6 +162,7 @@ async function normalizeMessage(msg, roomName, fallbackPassword, roomChannelId =
         mime: sanitized.mime,
         sender: msg.sender,
         timestamp: msg.timestamp,
+        roomChannelId: channelId,
       });
     } catch {
       // Odrzucony lub uszkodzony obraz — bez podglądu
@@ -184,8 +185,8 @@ async function normalizeMessages(messages, roomName, roomPassword, roomChannelId
   );
 }
 
-function mergeWithLocalImages(textMessages, roomName) {
-  const localImages = getLocalImagesForRoom(roomName);
+function mergeWithLocalImages(textMessages, roomName, roomChannelId = '') {
+  const localImages = getLocalImagesForRoom(roomName, roomChannelId);
   const serverIds = new Set(textMessages.filter((m) => m.imageId).map((m) => m.imageId));
   const uniqueLocal = localImages.filter((img) => !serverIds.has(img.imageId));
   return [...textMessages, ...uniqueLocal].sort((a, b) =>
@@ -221,6 +222,54 @@ function dedupeMessages(messages) {
     seen.add(key);
     return true;
   });
+}
+
+function appendMissingMessages(existing, incoming) {
+  if (!incoming?.length) return existing;
+  let result = existing;
+  for (const msg of incoming) {
+    const next = appendUniqueMessage(result, msg);
+    if (next !== result) result = next;
+  }
+  return result;
+}
+
+function hasPresenceMessage(messages, roomName) {
+  const presenceId = `presence-${roomName}`;
+  return messages.some((msg) => getMessageKey(msg) === presenceId);
+}
+
+function messageListSignature(messages) {
+  return messages.map((msg) => (
+    getMessageKey(msg) || `${msg.sender}|${msg.timestamp}|${msg.type}|${msg.content || ''}`
+  )).join('\0');
+}
+
+/** Dokleja brakujące wiadomości z serwera — bez przebudowy całej listy. */
+function reconcileRoomMessages(prevMessages, serverMessages, {
+  roomName,
+  showPresence,
+  users,
+  assignedUsername,
+  t,
+  formatTime,
+}) {
+  const base = prevMessages?.length
+    ? appendMissingMessages(prevMessages, serverMessages)
+    : dedupeMessages(serverMessages);
+
+  if (showPresence && Array.isArray(users) && !hasPresenceMessage(base, roomName)) {
+    const presenceMsg = createPresenceSystemMessage(
+      roomName,
+      users,
+      assignedUsername,
+      t,
+      formatTime,
+    );
+    return dedupeMessages([presenceMsg, ...base]);
+  }
+
+  return base;
 }
 
 function getJoinUsername() {
@@ -323,6 +372,8 @@ export default function ChatApp() {
   const pendingMaximizeRef = useRef(new Set());
   const processedInviteRef = useRef(null);
   const rejoinAfterRoomsListRef = useRef(false);
+  /** Pokoje, w których socket jest już dołączony — bez ponownego join przy minimize/restore. */
+  const socketJoinedRoomsRef = useRef(new Set());
   const socketHandlersRef = useRef({});
 
   const updateJoiningState = useCallback(() => {
@@ -337,6 +388,21 @@ export default function ChatApp() {
       return next;
     });
   }, []);
+
+  const roomNeedsSocketJoin = useCallback((roomName) => {
+    if (!roomName) return false;
+    if (!socketService.isConnected()) return true;
+    if (!socketJoinedRoomsRef.current.has(roomName)) return true;
+    const room = openRoomsRef.current[roomName];
+    return Boolean(room?.suspendedAt);
+  }, []);
+
+  const openRoomsNeedSocketRejoin = useCallback(() => {
+    const names = Object.keys(openRoomsRef.current);
+    if (names.length === 0) return false;
+    if (!socketService.isConnected()) return true;
+    return names.some((name) => roomNeedsSocketJoin(name));
+  }, [roomNeedsSocketJoin]);
 
   const clearJoinAckTimer = useCallback((roomName) => {
     const timer = joinAckTimersRef.current.get(roomName);
@@ -639,6 +705,10 @@ export default function ChatApp() {
       return false;
     }
 
+    if (restore && !roomNeedsSocketJoin(roomName)) {
+      return true;
+    }
+
     const existing = openRoomsRef.current[roomName];
     const meta = findActiveRoomMeta(activeRoomsRef.current, roomName);
     const joiningOpen = noPassword || isOpenRoomPassword(password) || meta?.isOpen;
@@ -702,7 +772,7 @@ export default function ChatApp() {
       clearRoomKey(roomName);
       return false;
     }
-  }, [syncOpenRooms, updateJoiningState, scheduleJoinAckTimer, clearJoinAckTimer, resolveRoomChannelIdForRoom]);
+  }, [syncOpenRooms, updateJoiningState, scheduleJoinAckTimer, clearJoinAckTimer, resolveRoomChannelIdForRoom, roomNeedsSocketJoin]);
 
   const joinInviteRoom = useCallback(async (invite) => {
     if (!invite?.roomName) return false;
@@ -721,6 +791,7 @@ export default function ChatApp() {
   const removeOpenRoomLocally = useCallback((roomName) => {
     if (!roomName) return;
 
+    socketJoinedRoomsRef.current.delete(roomName);
     clearRoomKey(roomName);
     clearRoomSession(roomName);
     clearLocalImagesForRoom(roomName);
@@ -843,6 +914,14 @@ export default function ChatApp() {
 
       if (entry.needsPasswordReentry || !isRoomPasswordKnown(entry.password)) {
         markNeedsPasswordReentry(entry);
+        return;
+      }
+
+      if (
+        socketJoinedRoomsRef.current.has(entry.roomName)
+        && !localRoom?.suspendedAt
+        && socketService.isConnected()
+      ) {
         return;
       }
 
@@ -985,56 +1064,73 @@ export default function ChatApp() {
       setRoomSession(roomName, password, channelId);
 
       const prevRoom = openRoomsRef.current[roomName];
+      const prevChannelId = normalizeRoomChannelId(prevRoom?.roomChannelId);
+      if (prevChannelId && channelId && prevChannelId !== channelId) {
+        clearLocalImagesForRoom(roomName);
+      }
+
       const serverMessages = initialMessages?.length
         ? await normalizeMessages(initialMessages, roomName, password, channelId)
         : [];
-      let merged = dedupeMessages(mergeWithLocalImages(
-        dedupeMessages([...(prevRoom?.messages || []), ...serverMessages]),
+      let merged = reconcileRoomMessages(prevRoom?.messages || [], serverMessages, {
         roomName,
-      ));
+        showPresence,
+        users,
+        assignedUsername: assignedUsername || usernameRef.current,
+        t: tRef.current,
+        formatTime: (date) => formatAppTime(date, langRef.current),
+      });
+      merged = dedupeMessages(mergeWithLocalImages(merged, roomName, channelId));
 
-      if (showPresence && Array.isArray(users)) {
-        const nick = assignedUsername || usernameRef.current;
-        const presenceMsg = createPresenceSystemMessage(
-          roomName,
-          users,
-          nick,
-          tRef.current,
-          (date) => formatAppTime(date, langRef.current),
-        );
-        merged = dedupeMessages([presenceMsg, ...merged]);
-      }
+      socketJoinedRoomsRef.current.add(roomName);
 
       const meta = buildRoomMeta(merged, prevRoom, tRef.current);
 
-      const liveCount = Array.isArray(users) ? users.length : null;
-      const roomNick = assignedUsername || prevRoom?.assignedUsername || usernameRef.current;
-      const localAvatar = readProfileAvatarFromStorage() || getJoinAvatarPayload(roomNick);
+      syncOpenRooms((prev) => {
+        const existing = prev[roomName];
+        const roomNick = assignedUsername || existing?.assignedUsername || usernameRef.current;
+        const localAvatar = readProfileAvatarFromStorage() || getJoinAvatarPayload(roomNick);
+        const liveCount = Array.isArray(users) ? users.length : null;
+        const nextQuickEmoji = quickEmoji || existing?.quickEmoji || DEFAULT_QUICK_EMOJI;
+        const nextProfiles = mergeUserProfiles(
+          buildUserProfilesFromServerUsers(users),
+          roomNick ? [{
+            username: roomNick,
+            avatarSeed: localAvatar.avatarSeed,
+            avatarStyle: localAvatar.avatarStyle,
+          }] : [],
+        );
 
-      syncOpenRooms((prev) => ({
-        ...prev,
-        [roomName]: {
-          ...(prev[roomName] || emptyRoomState(password, assignedUsername, channelId)),
-          password,
-          roomChannelId: channelId,
-          needsPasswordReentry: false,
-          suspendedAt: null,
-          assignedUsername: roomNick,
-          quickEmoji: quickEmoji || prev[roomName]?.quickEmoji || DEFAULT_QUICK_EMOJI,
-          messages: merged,
-          unread: 0,
-          userCount: liveCount ?? getRoomUserCount(activeRoomsRef.current, roomName) ?? prev[roomName]?.userCount ?? null,
-          userProfiles: mergeUserProfiles(
-            buildUserProfilesFromServerUsers(users),
-            roomNick ? [{
-              username: roomNick,
-              avatarSeed: localAvatar.avatarSeed,
-              avatarStyle: localAvatar.avatarStyle,
-            }] : [],
-          ),
-          ...meta,
-        },
-      }));
+        if (existing) {
+          const sameMessages = messageListSignature(existing.messages) === messageListSignature(merged);
+          const sameMeta = existing.assignedUsername === roomNick
+            && existing.quickEmoji === nextQuickEmoji
+            && existing.userCount === (liveCount ?? existing.userCount)
+            && !existing.suspendedAt
+            && !existing.needsPasswordReentry;
+          if (sameMessages && sameMeta) {
+            return prev;
+          }
+        }
+
+        return {
+          ...prev,
+          [roomName]: {
+            ...(existing || emptyRoomState(password, assignedUsername, channelId)),
+            password,
+            roomChannelId: channelId,
+            needsPasswordReentry: false,
+            suspendedAt: null,
+            assignedUsername: roomNick,
+            quickEmoji: nextQuickEmoji,
+            messages: merged,
+            unread: 0,
+            userCount: liveCount ?? getRoomUserCount(activeRoomsRef.current, roomName) ?? existing?.userCount ?? null,
+            userProfiles: nextProfiles,
+            ...meta,
+          },
+        };
+      });
 
       if (quickEmoji) {
         applyRoomQuickEmoji(roomName, quickEmoji);
@@ -1360,11 +1456,14 @@ export default function ChatApp() {
     };
 
     const onConnect = () => {
-      rejoinAfterRoomsListRef.current = Boolean(usernameRef.current);
+      rejoinAfterRoomsListRef.current = Boolean(
+        usernameRef.current && openRoomsNeedSocketRejoin(),
+      );
       socketService.emit('getRooms');
     };
 
     const onDisconnect = () => {
+      socketJoinedRoomsRef.current.clear();
       if (
         joiningRoomsRef.current.size === 0
         && pendingMaximizeRef.current.size === 0
@@ -1402,11 +1501,26 @@ export default function ChatApp() {
       onConnect,
       onDisconnect,
     };
-  }, [ready, socketActive, rejoinOpenRooms, pruneStaleOpenRooms, removeOpenRoomLocally, appendSystemMessage, syncOpenRooms, maximizeRoom, updateJoiningState, clearPendingInvite, clearJoinAckTimer, resolveRoomChannelIdForRoom]);
+  }, [ready, socketActive, rejoinOpenRooms, pruneStaleOpenRooms, removeOpenRoomLocally, appendSystemMessage, syncOpenRooms, maximizeRoom, updateJoiningState, clearPendingInvite, clearJoinAckTimer, resolveRoomChannelIdForRoom, openRoomsNeedSocketRejoin]);
 
   const resumeChatSession = useCallback(() => {
     if (!ready || !socketActive || !usernameRef.current) return;
     socketService.ensureConnected();
+
+    const openNames = Object.keys(openRoomsRef.current);
+    const sessionLive = openNames.length > 0
+      && socketService.isConnected()
+      && !openRoomsNeedSocketRejoin();
+
+    if (sessionLive) {
+      rejoinAfterRoomsListRef.current = false;
+      socketService.emit('getRooms');
+      for (const roomName of openNames) {
+        socketService.emit('getRoomUsers', roomName);
+      }
+      return;
+    }
+
     if (
       joiningRoomsRef.current.size === 0
       && pendingMaximizeRef.current.size === 0
@@ -1414,7 +1528,7 @@ export default function ChatApp() {
       rejoinAfterRoomsListRef.current = true;
     }
     socketService.emit('getRooms');
-  }, [ready, socketActive]);
+  }, [ready, socketActive, openRoomsNeedSocketRejoin]);
 
   useEffect(() => {
     if (!ready || !socketActive) return undefined;
@@ -1440,7 +1554,9 @@ export default function ChatApp() {
     socketService.on('reconnect', onReconnectBridge);
 
     if (socketService.isConnected()) {
-      rejoinAfterRoomsListRef.current = Boolean(usernameRef.current);
+      rejoinAfterRoomsListRef.current = Boolean(
+        usernameRef.current && openRoomsNeedSocketRejoin(),
+      );
       socketService.emit('getRooms');
     }
 
@@ -1450,7 +1566,7 @@ export default function ChatApp() {
       socketService.off('disconnect', onDisconnectBridge);
       socketService.off('reconnect', onReconnectBridge);
     };
-  }, [ready, socketActive]);
+  }, [ready, socketActive, openRoomsNeedSocketRejoin]);
 
   useEffect(() => {
     if (!ready || !socketActive) return undefined;
@@ -1467,6 +1583,7 @@ export default function ChatApp() {
     usernameRef.current = '';
     setUsername('');
     setSocketActive(false);
+    socketJoinedRoomsRef.current.clear();
     setExpandedRooms([]);
     setFocusedRoom(null);
     setFullscreenRoom(null);
@@ -1480,6 +1597,7 @@ export default function ChatApp() {
       if (!ok) return false;
       for (const roomName of roomNames) {
         socketService.emit('leaveRoom', { roomName });
+        socketJoinedRoomsRef.current.delete(roomName);
         clearRoomKey(roomName);
         clearRoomSession(roomName);
         clearLocalImagesForRoom(roomName);
@@ -1623,7 +1741,12 @@ export default function ChatApp() {
       && nick
     ) {
       setJoinModal({ open: true, roomName, password: '' });
-    } else if (isRoomPasswordKnown(room?.password) && nick && !joiningRoomsRef.current.has(roomName)) {
+    } else if (
+      isRoomPasswordKnown(room?.password)
+      && nick
+      && !joiningRoomsRef.current.has(roomName)
+      && roomNeedsSocketJoin(roomName)
+    ) {
       joiningRoomsRef.current.add(roomName);
       updateJoiningState();
       socketService.emit('joinRoom', {
@@ -1634,6 +1757,12 @@ export default function ChatApp() {
         noPassword: isOpenRoomPassword(room.password),
         ...buildSocketJoinPayload(nick, resolveRoomChannelIdForRoom(roomName)),
       });
+    } else if (
+      isRoomPasswordKnown(room?.password)
+      && nick
+      && !roomNeedsSocketJoin(roomName)
+    ) {
+      socketService.emit('getRoomUsers', roomName);
     }
 
     if (fullscreenRoom && !isCompact) {
@@ -1666,7 +1795,7 @@ export default function ChatApp() {
     }
 
     maximizeRoom(roomName);
-  }, [maximizeRoom, focusRoom, expandedRooms, focusedRoom, fullscreenRoom, isCompact, updateJoiningState]);
+  }, [maximizeRoom, focusRoom, expandedRooms, focusedRoom, fullscreenRoom, isCompact, updateJoiningState, roomNeedsSocketJoin, resolveRoomChannelIdForRoom]);
 
   const handleFocusRoom = useCallback((roomName) => {
     focusRoom(roomName);
@@ -1813,7 +1942,13 @@ export default function ChatApp() {
     }
 
     try {
-      saveLocalImage(roomName, imageId, { data, mime, sender: nick, timestamp });
+      saveLocalImage(roomName, imageId, {
+        data,
+        mime,
+        sender: nick,
+        timestamp,
+        roomChannelId: resolveRoomChannelIdForRoom(roomName),
+      });
     } catch (err) {
       if (err?.name === 'QuotaExceededError') {
         throw new Error(tRef.current('errors.storageFull'));

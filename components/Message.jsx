@@ -2,6 +2,7 @@
 
 import { memo, useMemo, useState, useCallback, useEffect } from 'react';
 import { getLocalImage, LOCAL_MEDIA_STORAGE_KEY } from '@/lib/localMessageStore';
+import { getRoomChannelId } from '@/lib/roomSession';
 import { useTranslation } from '@/context/LocaleContext';
 import { translateSystemMessage } from '@/lib/i18n/systemMessages';
 import ImageLightbox from '@/components/ImageLightbox';
@@ -53,7 +54,7 @@ function Message({
 
   const imageSrc = useMemo(() => {
     if (type !== 'image' || !imageId || !roomName) return null;
-    return getLocalImage(roomName, imageId);
+    return getLocalImage(roomName, imageId, getRoomChannelId(roomName));
   }, [type, imageId, roomName, mediaRevision]);
 
   const openLightbox = useCallback((e) => {

@@ -114,6 +114,15 @@
   color: #fca5a5;
 }
 
+.chat-pip__messages-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .chat-pip__messages {
   flex: 1;
   min-height: 0;
@@ -121,9 +130,22 @@
   overflow-x: hidden;
   overflow-y: auto;
   padding: 0.65rem;
+}
+
+.chat-pip__messages-list {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  min-height: 100%;
+}
+
+.chat-jump-latest--pip {
+  bottom: 0.5rem;
+  padding: 0.4rem;
+}
+
+.chat-jump-latest--pip .chat-jump-latest__label {
+  display: none;
 }
 
 .chat-pip__empty {

@@ -9,6 +9,7 @@ import { useTranslation } from '@/context/LocaleContext';
 import { PictureInPictureIcon } from '@/components/icons/PictureInPictureIcon';
 import { RoomLockIcon } from '@/components/icons/RoomLockIcon';
 import { isRoomOpenChannel, isRoomPasswordKnown } from '@/lib/roomAccess';
+import { useChatMessageScroll } from '@/hooks/useChatMessageScroll';
 import './ChatWindow.css';
 import './ChannelOptionsMenu.css';
 
@@ -38,11 +39,17 @@ export default function ChatWindow({
   sendCooldownSeconds = 0,
 }) {
   const { t } = useTranslation();
-  const messagesEndRef = useRef(null);
   const titleBtnRef = useRef(null);
   const inputFocusedRef = useRef(false);
   const [channelMenuOpen, setChannelMenuOpen] = useState(false);
   const displayName = assignedUsername || currentUsername;
+  const {
+    containerRef: messagesContainerRef,
+    contentRef: messagesContentRef,
+    showJumpToLatest,
+    scrollToBottom,
+    handleScroll: handleMessagesScroll,
+  } = useChatMessageScroll(messages, { currentUserLabel: displayName, resetKey: roomName });
   const channelIsOpen = isRoomOpenChannel(
     channelRoomState
       ?? (isRoomPasswordKnown(roomPassword) ? { password: roomPassword } : null),
@@ -116,13 +123,13 @@ export default function ChatWindow({
     </button>
   );
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
   const scrollMessagesToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ block: 'end', behavior: 'auto' });
-  }, []);
+    scrollToBottom('auto');
+  }, [scrollToBottom]);
+
+  const handleJumpToLatest = useCallback(() => {
+    scrollToBottom('smooth');
+  }, [scrollToBottom]);
 
   const handleInputFocus = useCallback(() => {
     inputFocusedRef.current = true;
@@ -260,34 +267,58 @@ export default function ChatWindow({
         {t('chat.notice')}
       </div>
 
-      <div className="chat-messages" role="log" aria-live="polite">
-        {messages.length === 0 && (
-          <p className="chat-messages__empty">{t('chat.empty')}</p>
+      <div className="chat-window__messages-wrap">
+        <div
+          className="chat-messages"
+          ref={messagesContainerRef}
+          onScroll={handleMessagesScroll}
+          role="log"
+          aria-live="polite"
+        >
+          <div ref={messagesContentRef} className="chat-messages__list">
+            {messages.length === 0 && (
+              <p className="chat-messages__empty">{t('chat.empty')}</p>
+            )}
+            {messages.map((msg, index) => {
+              const profile = getSenderProfile?.(msg.sender) || {};
+              return (
+                <Message
+                  key={[
+                    roomName,
+                    msg.messageId || msg.imageId || `msg-${index}-${msg.timestamp}`,
+                    msg.sender,
+                    profile.avatarSeed || '',
+                    profile.avatarStyle || '',
+                  ].join('-')}
+                  sender={msg.sender}
+                  content={msg.content}
+                  timestamp={msg.timestamp}
+                  type={msg.type}
+                  imageId={msg.imageId}
+                  roomName={roomName}
+                  isCurrentUser={msg.sender === displayName}
+                  isSystem={msg.sender === 'System'}
+                  avatarSeed={profile.avatarSeed}
+                  avatarStyle={profile.avatarStyle}
+                />
+              );
+            })}
+          </div>
+        </div>
+        {showJumpToLatest && (
+          <button
+            type="button"
+            className="chat-jump-latest"
+            onClick={handleJumpToLatest}
+            aria-label={t('chat.jumpToLatestAria')}
+            title={t('chat.jumpToLatest')}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" aria-hidden="true">
+              <path d="M12 5v14M5 12l7 7 7-7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="chat-jump-latest__label">{t('chat.jumpToLatest')}</span>
+          </button>
         )}
-        {messages.map((msg, index) => {
-          const profile = getSenderProfile?.(msg.sender) || {};
-          return (
-            <Message
-              key={[
-                msg.messageId || msg.imageId || `msg-${index}-${msg.timestamp}`,
-                msg.sender,
-                profile.avatarSeed || '',
-                profile.avatarStyle || '',
-              ].join('-')}
-              sender={msg.sender}
-              content={msg.content}
-              timestamp={msg.timestamp}
-              type={msg.type}
-              imageId={msg.imageId}
-              roomName={roomName}
-              isCurrentUser={msg.sender === displayName}
-              isSystem={msg.sender === 'System'}
-              avatarSeed={profile.avatarSeed}
-              avatarStyle={profile.avatarStyle}
-            />
-          );
-        })}
-        <div ref={messagesEndRef} />
       </div>
 
       <MessageInput

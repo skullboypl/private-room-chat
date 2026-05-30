@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useCallback } from 'react';
 import Message from '@/components/Message';
 import MessageInput from '@/components/MessageInput';
 import { useTranslation } from '@/context/LocaleContext';
 import { resolveSenderProfile } from '@/lib/resolveSenderProfile';
+import { useChatMessageScroll } from '@/hooks/useChatMessageScroll';
 import './ChatPiPView.css';
 
 export default function ChatPiPView({
@@ -17,16 +18,27 @@ export default function ChatPiPView({
   sendCooldownSeconds = 0,
 }) {
   const { t } = useTranslation();
-  const messagesEndRef = useRef(null);
   const current = rooms.find((room) => room.roomName === activeRoom) ?? rooms[0];
+  const messages = current?.messages ?? [];
+  const displayName = current?.displayName ?? '';
+  const roomName = current?.roomName ?? '';
+  const quickEmoji = current?.quickEmoji;
+  const userProfiles = current?.userProfiles ?? {};
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [current?.messages, current?.roomName]);
+  const {
+    containerRef: messagesContainerRef,
+    contentRef: messagesContentRef,
+    showJumpToLatest,
+    scrollToBottom,
+    handleScroll: handleMessagesScroll,
+  } = useChatMessageScroll(messages, { currentUserLabel: displayName, resetKey: roomName });
+
+  const handleJumpToLatest = useCallback(() => {
+    scrollToBottom('smooth');
+  }, [scrollToBottom]);
 
   if (!current) return null;
 
-  const { roomName, messages, displayName, quickEmoji, userProfiles = {} } = current;
   const showTabs = rooms.length > 1;
 
   const getSenderProfile = (sender) => resolveSenderProfile(
@@ -92,34 +104,56 @@ export default function ChatPiPView({
         )}
       </header>
 
-      <div className="chat-pip__messages" role="log" aria-live="polite">
-        {messages.length === 0 && (
-          <p className="chat-pip__empty">{t('chat.emptyPip')}</p>
+      <div className="chat-pip__messages-wrap">
+        <div
+          className="chat-pip__messages"
+          ref={messagesContainerRef}
+          onScroll={handleMessagesScroll}
+          role="log"
+          aria-live="polite"
+        >
+          <div ref={messagesContentRef} className="chat-pip__messages-list">
+            {messages.length === 0 && (
+              <p className="chat-pip__empty">{t('chat.emptyPip')}</p>
+            )}
+            {messages.map((msg, index) => {
+              const profile = getSenderProfile(msg.sender);
+              return (
+                <Message
+                  key={[
+                    msg.messageId || msg.imageId || `pip-${roomName}-${index}-${msg.timestamp}`,
+                    msg.sender,
+                    profile.avatarSeed || '',
+                    profile.avatarStyle || '',
+                  ].join('-')}
+                  sender={msg.sender}
+                  content={msg.content}
+                  timestamp={msg.timestamp}
+                  type={msg.type}
+                  imageId={msg.imageId}
+                  roomName={roomName}
+                  isCurrentUser={msg.sender === displayName}
+                  isSystem={msg.sender === 'System'}
+                  avatarSeed={profile.avatarSeed}
+                  avatarStyle={profile.avatarStyle}
+                />
+              );
+            })}
+          </div>
+        </div>
+        {showJumpToLatest && (
+          <button
+            type="button"
+            className="chat-jump-latest chat-jump-latest--pip"
+            onClick={handleJumpToLatest}
+            aria-label={t('chat.jumpToLatestAria')}
+            title={t('chat.jumpToLatest')}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" aria-hidden="true">
+              <path d="M12 5v14M5 12l7 7 7-7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
         )}
-        {messages.map((msg, index) => {
-          const profile = getSenderProfile(msg.sender);
-          return (
-            <Message
-              key={[
-                msg.messageId || msg.imageId || `pip-${roomName}-${index}-${msg.timestamp}`,
-                msg.sender,
-                profile.avatarSeed || '',
-                profile.avatarStyle || '',
-              ].join('-')}
-              sender={msg.sender}
-              content={msg.content}
-              timestamp={msg.timestamp}
-              type={msg.type}
-              imageId={msg.imageId}
-              roomName={roomName}
-              isCurrentUser={msg.sender === displayName}
-              isSystem={msg.sender === 'System'}
-              avatarSeed={profile.avatarSeed}
-              avatarStyle={profile.avatarStyle}
-            />
-          );
-        })}
-        <div ref={messagesEndRef} />
       </div>
 
       <MessageInput

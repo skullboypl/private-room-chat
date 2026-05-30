@@ -7,7 +7,7 @@ import {
   getLocalImage,
   LOCAL_MEDIA_STORAGE_KEY,
 } from '@/lib/localMessageStore';
-import { getRoomPassword } from '@/lib/roomSession';
+import { getRoomPassword, getRoomChannelId } from '@/lib/roomSession';
 import { isOpenRoomPassword } from '@/lib/roomAccess';
 import { applyRoomQuickEmoji, getRoomQuickEmoji, DEFAULT_QUICK_EMOJI } from '@/lib/roomEmoji';
 import { socketService } from '@/lib/socket/client';
@@ -75,7 +75,7 @@ export default function ChannelOptionsMenu({
   useEffect(() => {
     if (!open) return;
 
-    const refreshMedia = () => setMedia(getLocalImagesForRoom(roomName));
+    const refreshMedia = () => setMedia(getLocalImagesForRoom(roomName, getRoomChannelId(roomName)));
 
     updatePosition();
     setQuickEmoji(getRoomQuickEmoji(roomName));
@@ -242,7 +242,7 @@ export default function ChannelOptionsMenu({
             ) : (
               <div className="channel-options-media-grid">
                 {media.map((item) => {
-                  const url = getLocalImage(roomName, item.imageId);
+                  const url = getLocalImage(roomName, item.imageId, getRoomChannelId(roomName));
                   if (!url) return null;
                   return (
                     <a
