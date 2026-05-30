@@ -80,12 +80,28 @@ import {
 } from '@/lib/userAvatarStorage';
 import { resolveSenderProfile } from '@/lib/resolveSenderProfile';
 import { invalidateUserAvatarCache } from '@/lib/userAvatar';
+import { bindPageResume } from '@/lib/pageResume';
+import { isWithinSessionGrace } from '@/lib/sessionGrace';
 import '@/components/chat-app.css';
+
+const SOCKET_HANDLER_EVENTS = [
+  ['roomJoined', 'onRoomJoined'],
+  ['receiveMessage', 'onReceiveMessage'],
+  ['roomQuickEmojiUpdated', 'onRoomQuickEmojiUpdated'],
+  ['roomNickChanged', 'onRoomNickChanged'],
+  ['userJoined', 'onUserJoined'],
+  ['roomUserAvatarUpdated', 'onRoomUserAvatarUpdated'],
+  ['roomUsersList', 'onRoomUsersList'],
+  ['userLeft', 'onUserLeft'],
+  ['roomError', 'onRoomError'],
+  ['activeRoomsList', 'onActiveRoomsList'],
+];
 
 function emptyRoomState(password = '', assignedUsername = '') {
   return {
     password,
     needsPasswordReentry: false,
+    suspendedAt: null,
     assignedUsername,
     quickEmoji: DEFAULT_QUICK_EMOJI,
     messages: [],
@@ -204,6 +220,7 @@ function hydrateOpenRoomsFromSession(list) {
       acc[entry.roomName] = {
         ...emptyRoomState(null, entry.assignedUsername || ''),
         needsPasswordReentry: true,
+        suspendedAt: entry.suspendedAt || null,
         lastPreview: entry.lastPreview || '',
         lastTimestamp: entry.lastTimestamp || '',
         unread: entry.unread || 0,
@@ -216,6 +233,7 @@ function hydrateOpenRoomsFromSession(list) {
     setRoomSession(entry.roomName, entry.password);
     acc[entry.roomName] = {
       ...emptyRoomState(entry.password, entry.assignedUsername || ''),
+      suspendedAt: entry.suspendedAt || null,
       lastPreview: entry.lastPreview || '',
       lastTimestamp: entry.lastTimestamp || '',
       unread: entry.unread || 0,
@@ -274,6 +292,7 @@ export default function ChatApp() {
   const pendingMaximizeRef = useRef(new Set());
   const processedInviteRef = useRef(null);
   const rejoinAfterRoomsListRef = useRef(false);
+  const socketHandlersRef = useRef({});
 
   const updateJoiningState = useCallback(() => {
     setJoiningRoom(joiningRoomsRef.current.size > 0);
@@ -639,6 +658,7 @@ export default function ChatApp() {
       if (joiningRoomsRef.current.has(roomName)) continue;
       if (pendingInviteRef.current?.roomName === roomName) continue;
       if (!activeNames.has(roomName)) {
+        if (isWithinSessionGrace(room?.suspendedAt)) continue;
         toRemove.push(roomName);
         continue;
       }
@@ -808,8 +828,6 @@ export default function ChatApp() {
   useEffect(() => {
     if (!ready || !socketActive) return;
 
-    socketService.connect();
-
     const onRoomJoined = async ({
       roomName,
       messages: initialMessages,
@@ -838,10 +856,10 @@ export default function ChatApp() {
       const serverMessages = initialMessages?.length
         ? await normalizeMessages(initialMessages, roomName, password)
         : [];
-      const baseMessages = serverMessages.length > 0
-        ? serverMessages
-        : (prevRoom?.messages || []);
-      let merged = dedupeMessages(mergeWithLocalImages(baseMessages, roomName));
+      let merged = dedupeMessages(mergeWithLocalImages(
+        dedupeMessages([...(prevRoom?.messages || []), ...serverMessages]),
+        roomName,
+      ));
 
       if (showPresence && Array.isArray(users)) {
         const nick = assignedUsername || usernameRef.current;
@@ -867,6 +885,7 @@ export default function ChatApp() {
           ...(prev[roomName] || emptyRoomState(password, assignedUsername)),
           password,
           needsPasswordReentry: false,
+          suspendedAt: null,
           assignedUsername: roomNick,
           quickEmoji: quickEmoji || prev[roomName]?.quickEmoji || DEFAULT_QUICK_EMOJI,
           messages: merged,
@@ -1153,23 +1172,19 @@ export default function ChatApp() {
       }
 
       setRoomError(errMsg);
-
-      if (roomName && !isNickChangeError) {
-        clearRoomKey(roomName);
-        if (isWrongPassword) clearRoomSession(roomName);
-        syncOpenRooms((prev) => {
-          const next = { ...prev };
-          delete next[roomName];
-          return next;
-        });
-        setExpandedRooms((prev) => prev.filter((name) => name !== roomName));
-      }
     };
 
     const onActiveRoomsList = (rooms) => {
       const normalized = normalizeActiveRoomsList(rooms);
       activeRoomsRef.current = normalized;
       setActiveRooms(normalized);
+
+      const shouldRejoin = rejoinAfterRoomsListRef.current && usernameRef.current;
+      if (shouldRejoin) {
+        rejoinAfterRoomsListRef.current = false;
+        void rejoinOpenRooms();
+      }
+
       pruneStaleOpenRooms(normalized);
       syncOpenRooms((prev) => {
         let changed = false;
@@ -1181,11 +1196,6 @@ export default function ChatApp() {
         }
         return changed ? next : prev;
       });
-
-      if (rejoinAfterRoomsListRef.current && usernameRef.current) {
-        rejoinAfterRoomsListRef.current = false;
-        void rejoinOpenRooms();
-      }
     };
 
     const onConnect = () => {
@@ -1196,43 +1206,93 @@ export default function ChatApp() {
     const onDisconnect = () => {
       joiningRoomsRef.current.clear();
       updateJoiningState();
+      if (!usernameRef.current) return;
+
+      rejoinAfterRoomsListRef.current = true;
+      const now = Date.now();
+      syncOpenRooms((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const [name, room] of Object.entries(next)) {
+          if (!room || isWithinSessionGrace(room.suspendedAt)) continue;
+          next[name] = { ...room, suspendedAt: now };
+          changed = true;
+        }
+        return changed ? next : prev;
+      });
+      persistOpenRooms(openRoomsRef.current, activeRoomRef.current);
     };
 
-    socketService.on('roomJoined', onRoomJoined);
-    socketService.on('receiveMessage', onReceiveMessage);
-    socketService.on('roomQuickEmojiUpdated', onRoomQuickEmojiUpdated);
-    socketService.on('roomNickChanged', onRoomNickChanged);
-    socketService.on('userJoined', onUserJoined);
-    socketService.on('roomUserAvatarUpdated', onRoomUserAvatarUpdated);
-    socketService.on('roomUsersList', onRoomUsersList);
-    socketService.on('userLeft', onUserLeft);
-    socketService.on('roomError', onRoomError);
-    socketService.on('activeRoomsList', onActiveRoomsList);
-    socketService.on('connect', onConnect);
-    socketService.on('disconnect', onDisconnect);
+    socketHandlersRef.current = {
+      onRoomJoined,
+      onReceiveMessage,
+      onRoomQuickEmojiUpdated,
+      onRoomNickChanged,
+      onUserJoined,
+      onRoomUserAvatarUpdated,
+      onRoomUsersList,
+      onUserLeft,
+      onRoomError,
+      onActiveRoomsList,
+      onConnect,
+      onDisconnect,
+    };
+  }, [ready, socketActive, rejoinOpenRooms, pruneStaleOpenRooms, removeOpenRoomLocally, appendSystemMessage, syncOpenRooms, maximizeRoom, updateJoiningState, clearPendingInvite]);
 
-    if (socketService.socket?.connected) {
+  const resumeChatSession = useCallback(() => {
+    if (!ready || !socketActive || !usernameRef.current) return;
+    socketService.ensureConnected();
+    rejoinAfterRoomsListRef.current = true;
+    socketService.emit('getRooms');
+  }, [ready, socketActive]);
+
+  useEffect(() => {
+    if (!ready || !socketActive) return undefined;
+
+    socketService.connect();
+
+    const bindings = SOCKET_HANDLER_EVENTS.map(([event, key]) => {
+      const handler = (...args) => {
+        const fn = socketHandlersRef.current[key];
+        if (fn) return fn(...args);
+        return undefined;
+      };
+      socketService.on(event, handler);
+      return [event, handler];
+    });
+
+    const onConnectBridge = () => socketHandlersRef.current.onConnect?.();
+    const onDisconnectBridge = (reason) => socketHandlersRef.current.onDisconnect?.(reason);
+    const onReconnectBridge = () => socketHandlersRef.current.onConnect?.();
+
+    socketService.on('connect', onConnectBridge);
+    socketService.on('disconnect', onDisconnectBridge);
+    socketService.on('reconnect', onReconnectBridge);
+
+    if (socketService.isConnected()) {
       rejoinAfterRoomsListRef.current = Boolean(usernameRef.current);
       socketService.emit('getRooms');
     }
 
     return () => {
-      socketService.off('roomJoined', onRoomJoined);
-      socketService.off('receiveMessage', onReceiveMessage);
-      socketService.off('roomQuickEmojiUpdated', onRoomQuickEmojiUpdated);
-      socketService.off('roomNickChanged', onRoomNickChanged);
-      socketService.off('userJoined', onUserJoined);
-      socketService.off('roomUserAvatarUpdated', onRoomUserAvatarUpdated);
-      socketService.off('roomUsersList', onRoomUsersList);
-      socketService.off('userLeft', onUserLeft);
-      socketService.off('roomError', onRoomError);
-      socketService.off('activeRoomsList', onActiveRoomsList);
-      socketService.off('connect', onConnect);
-      socketService.off('disconnect', onDisconnect);
-      socketService.disconnect();
-      clearRoomKey();
+      bindings.forEach(([event, handler]) => socketService.off(event, handler));
+      socketService.off('connect', onConnectBridge);
+      socketService.off('disconnect', onDisconnectBridge);
+      socketService.off('reconnect', onReconnectBridge);
     };
-  }, [ready, socketActive, rejoinOpenRooms, pruneStaleOpenRooms, removeOpenRoomLocally, appendSystemMessage, syncOpenRooms, maximizeRoom, updateJoiningState, clearPendingInvite]);
+  }, [ready, socketActive]);
+
+  useEffect(() => {
+    if (!ready || !socketActive) return undefined;
+    return bindPageResume(resumeChatSession);
+  }, [ready, socketActive, resumeChatSession]);
+
+  useEffect(() => {
+    if (ready && socketActive) return undefined;
+    socketService.disconnect();
+    clearRoomKey();
+    return undefined;
+  }, [ready, socketActive]);
 
   const handleClearUser = useCallback(() => {
     usernameRef.current = '';
