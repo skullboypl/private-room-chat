@@ -8,6 +8,7 @@ import {
   STACK_ITEMS,
 } from '@/lib/siteFooterShared';
 import ClearBrowserDataButton from '@/components/ClearBrowserDataButton';
+import FooterGitHubLink from '@/components/FooterGitHubLink';
 
 export default function InfoFooter({ lang = 'pl' }) {
   const navItems = getWikiNavItems(lang);
@@ -35,6 +36,7 @@ export default function InfoFooter({ lang = 'pl' }) {
 
       <div className="seo-footer__extra">
         <ClearBrowserDataButton className="seo-footer__clear-btn" lang={lang} />
+        <FooterGitHubLink className="seo-footer__github" lang={lang} />
         <p className="seo-footer__credit">
           {ui.footerCredit}{' '}
           <a href={SITE_AUTHOR.url} target="_blank" rel="noopener noreferrer">

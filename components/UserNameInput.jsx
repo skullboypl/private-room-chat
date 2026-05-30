@@ -46,8 +46,16 @@ export default function UserNameInput({
 
   const [name, setName] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
-  const [avatarSeed, setAvatarSeed] = useState('');
-  const [avatarStyle, setAvatarStyle] = useState(readStoredUserAvatarStyle());
+  const [avatarSeed, setAvatarSeed] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    const stored = readStoredUserAvatarSeed();
+    if (stored) return stored;
+    if (readStoredUsername()) return '';
+    const { seed, style } = createRandomAvatar();
+    writeStoredUserAvatar(seed, style);
+    return seed;
+  });
+  const [avatarStyle, setAvatarStyle] = useState(readStoredUserAvatarStyle);
   const [draftName, setDraftName] = useState('');
   const [draftAvatarSeed, setDraftAvatarSeed] = useState('');
   const [draftAvatarStyle, setDraftAvatarStyle] = useState(readStoredUserAvatarStyle());
@@ -63,14 +71,14 @@ export default function UserNameInput({
     }
   }, []);
 
-  const syncAvatarFromStorage = useCallback(() => {
+  const syncAvatarFromStorage = useCallback(({ persist = false } = {}) => {
     const storedSeed = readStoredUserAvatarSeed();
     if (storedSeed) {
-      applyAvatarState(storedSeed, readStoredUserAvatarStyle());
+      applyAvatarState(storedSeed, readStoredUserAvatarStyle(), { persist });
       return;
     }
     const { seed, style } = createRandomAvatar();
-    applyAvatarState(seed, style);
+    applyAvatarState(seed, style, { persist });
   }, [applyAvatarState]);
 
   useEffect(() => {
@@ -78,18 +86,14 @@ export default function UserNameInput({
     const nextName = (stored || String(initialName || '').trim());
     if (nextName) {
       setName(nextName);
-      syncAvatarFromStorage();
+      syncAvatarFromStorage({ persist: true });
+    } else if (!compact) {
+      setName('');
+      syncAvatarFromStorage({ persist: true });
     } else {
       setName('');
-      const storedSeed = readStoredUserAvatarSeed();
-      if (storedSeed) {
-        applyAvatarState(storedSeed, readStoredUserAvatarStyle());
-      } else {
-        const { seed, style } = createRandomAvatar();
-        applyAvatarState(seed, style);
-      }
     }
-  }, [initialName, syncAvatarFromStorage, applyAvatarState]);
+  }, [initialName, compact, syncAvatarFromStorage]);
 
   useEffect(() => {
     if (!compact || !name) return;
@@ -183,12 +187,12 @@ export default function UserNameInput({
 
   const persistProfile = (trimmed, seed, style) => {
     writeStoredUserAvatar(seed, style);
+    invalidateUserAvatarCache();
     localStorage.setItem('username', trimmed);
     setName(trimmed);
     setAvatarSeed(seed);
     setAvatarStyle(style);
-    invalidateUserAvatarCache();
-    onSetUsername(trimmed);
+    onSetUsername(trimmed, { avatarSeed: seed, avatarStyle: style });
     onAvatarChange?.({ avatarSeed: seed, avatarStyle: style });
   };
 
@@ -226,13 +230,10 @@ export default function UserNameInput({
     const trimmed = name.trim();
     if (!trimmed) return;
 
-    let seed = avatarSeed || readStoredUserAvatarSeed();
-    let style = avatarStyle || readStoredUserAvatarStyle();
-    if (!seed) {
-      const created = createRandomAvatar();
-      seed = created.seed;
-      style = created.style;
-    }
+    const seed = avatarSeed || readStoredUserAvatarSeed();
+    const style = avatarStyle || readStoredUserAvatarStyle();
+    if (!seed) return;
+
     persistProfile(trimmed, seed, style);
   };
 
@@ -245,7 +246,9 @@ export default function UserNameInput({
     ? Math.max(1, Math.ceil(nickRandomizeCooldownMs / 1000))
     : 0;
 
-  const displaySeed = avatarSeed || readStoredUserAvatarSeed();
+  const displaySeed = compact
+    ? (avatarSeed || readStoredUserAvatarSeed())
+    : avatarSeed;
   const displayStyle = avatarStyle;
   const hasPriorSession = Boolean(readStoredUsername());
 

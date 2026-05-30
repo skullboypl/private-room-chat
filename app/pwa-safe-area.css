@@ -64,9 +64,9 @@
 
     .site-shell--pwa .app-site-footer--welcome .app-site-footer__inner,
     .site-shell--pwa .app-site-footer--dock .app-site-footer__inner {
-      padding-bottom: 1.25rem;
-      padding-left: max(1rem, var(--safe-left));
-      padding-right: max(1rem, var(--safe-right));
+      padding-bottom: max(0.65rem, var(--safe-bottom));
+      padding-left: max(0.75rem, var(--safe-left));
+      padding-right: max(0.75rem, var(--safe-right));
     }
 
     html.html--mobile-chat .site-shell--pwa {

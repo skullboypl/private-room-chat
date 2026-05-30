@@ -11,6 +11,7 @@ import {
 } from '@/lib/siteFooterShared';
 import { SITE_HOST } from '@/lib/seo/site';
 import ClearBrowserDataButton from '@/components/ClearBrowserDataButton';
+import FooterGitHubLink from '@/components/FooterGitHubLink';
 import './AppSiteFooter.css';
 
 export default function AppSiteFooter({ variant = 'inline' }) {
@@ -38,8 +39,11 @@ export default function AppSiteFooter({ variant = 'inline' }) {
           </ul>
         </nav>
 
-        <div className="app-site-footer__actions">
-          <ClearBrowserDataButton />
+        <div className="app-site-footer__toolbar">
+          <FooterGitHubLink className="app-site-footer__github" />
+          <div className="app-site-footer__actions">
+            <ClearBrowserDataButton />
+          </div>
         </div>
 
         <p className="app-site-footer__credit">
