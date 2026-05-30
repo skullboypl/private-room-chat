@@ -34,18 +34,46 @@
 
 @media (display-mode: standalone), (display-mode: fullscreen) {
   @media (max-width: 720px) {
+    html.pwa-standalone {
+      overscroll-behavior-y: none;
+    }
+
+    html.pwa-standalone body {
+      overscroll-behavior-y: none;
+    }
+
     .site-shell--pwa {
       box-sizing: border-box;
       min-height: 100dvh;
-      height: 100dvh;
       padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
-      overflow: hidden;
+      overflow-x: hidden;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .site-shell--pwa .welcome {
+      min-height: min(100%, calc(100dvh - var(--safe-top) - var(--safe-bottom)));
+    }
+
+    .site-shell--pwa .welcome__body {
+      padding-top: 1.25rem;
+      padding-bottom: 1rem;
+      padding-left: max(0.75rem, var(--safe-left));
+      padding-right: max(0.75rem, var(--safe-right));
+    }
+
+    .site-shell--pwa .app-site-footer--welcome .app-site-footer__inner,
+    .site-shell--pwa .app-site-footer--dock .app-site-footer__inner {
+      padding-bottom: 1.25rem;
+      padding-left: max(1rem, var(--safe-left));
+      padding-right: max(1rem, var(--safe-right));
     }
 
     html.html--mobile-chat .site-shell--pwa {
       padding: 0;
-      height: 100%;
+      height: 100dvh;
       min-height: 0;
+      overflow: hidden;
     }
 
     .site-shell--pwa .app--messenger-full {
@@ -70,12 +98,6 @@
 
     .site-shell--pwa .fb-layout--fullscreen-tabs .chat-window--panel.chat-window--fullscreen .chat-header {
       padding-top: 0.5rem;
-    }
-
-    .site-shell--pwa .welcome__body {
-      padding-top: 1.5rem;
-      padding-left: 1rem;
-      padding-right: 1rem;
     }
 
     .site-shell--pwa .pwa-install {

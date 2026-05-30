@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "node server.js",
     "build": "next build",
-    "start": "node server.js"
+    "start": "node server.js",
+    "generate-icons": "node scripts/generate-pwa-icons.mjs"
   },
   "engines": {
     "node": ">=18"
@@ -24,5 +25,8 @@
     "react-dom": "^19.1.0",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "sharp": "^0.34.5"
   }
 }

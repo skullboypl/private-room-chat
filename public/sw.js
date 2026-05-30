@@ -1,5 +1,13 @@
-const CACHE = 'pokoje-czatu-shell-v1';
-const SHELL = ['/', '/manifest.webmanifest', '/favicon.svg', '/og-image.svg'];
+const CACHE = 'pokoje-czatu-shell-v2';
+const SHELL = [
+  '/',
+  '/manifest.webmanifest',
+  '/favicon.svg',
+  '/apple-touch-icon.png',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/icon-maskable-512.png',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
