@@ -33,6 +33,7 @@ export default function ChatWindow({
   hideHeader = false,
   roomUserCount = null,
   activeRooms = [],
+  channelRoomState = null,
   getSenderProfile,
   sendCooldownSeconds = 0,
 }) {
@@ -42,7 +43,8 @@ export default function ChatWindow({
   const [channelMenuOpen, setChannelMenuOpen] = useState(false);
   const displayName = assignedUsername || currentUsername;
   const channelIsOpen = isRoomOpenChannel(
-    isRoomPasswordKnown(roomPassword) ? { password: roomPassword } : null,
+    channelRoomState
+      ?? (isRoomPasswordKnown(roomPassword) ? { password: roomPassword } : null),
     activeRooms,
     roomName,
   );

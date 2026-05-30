@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { socketService } from '@/lib/socket/client';
 import {
   ensureRoomKey,
+  assertE2eCryptoAvailable,
   hasRoomKey,
   clearRoomKey,
   encryptMessage,
@@ -20,6 +21,7 @@ import {
 import {
   setRoomSession,
   getRoomPassword,
+  getRoomChannelId,
   clearRoomSession,
   loadPersistedSession,
   persistOpenRooms,
@@ -60,6 +62,8 @@ import {
   isOpenRoomPassword,
   isRoomPasswordKnown,
   normalizeActiveRoomsList,
+  resolveRoomCredential,
+  resolveRoomPasswordForCrypto,
   resolveRoomUserCount,
   roomCredentialMatchesServer,
 } from '@/lib/roomAccess';
@@ -81,6 +85,9 @@ import {
 import { resolveSenderProfile } from '@/lib/resolveSenderProfile';
 import { invalidateUserAvatarCache } from '@/lib/userAvatar';
 import { bindPageResume } from '@/lib/pageResume';
+import { getOrCreateClientSessionId } from '@/lib/clientSessionId';
+import { initSecureBrowserStorage, secureLocalSetSync } from '@/lib/secureBrowserStorage';
+import { normalizeRoomChannelId } from '@/lib/roomChannelId';
 import { isWithinSessionGrace } from '@/lib/sessionGrace';
 import '@/components/chat-app.css';
 
@@ -97,9 +104,10 @@ const SOCKET_HANDLER_EVENTS = [
   ['activeRoomsList', 'onActiveRoomsList'],
 ];
 
-function emptyRoomState(password = '', assignedUsername = '') {
+function emptyRoomState(password = '', assignedUsername = '', roomChannelId = '') {
   return {
     password,
+    roomChannelId: normalizeRoomChannelId(roomChannelId),
     needsPasswordReentry: false,
     suspendedAt: null,
     assignedUsername,
@@ -118,19 +126,31 @@ function parseSocketText(payload) {
   return payload?.message || '';
 }
 
-async function normalizeMessage(msg, roomName, fallbackPassword) {
+async function normalizeMessage(msg, roomName, fallbackPassword, roomChannelId = '') {
   if (msg.sender === 'System') return msg;
 
   const sessionPassword = getRoomPassword(roomName);
   const password = isRoomPasswordKnown(sessionPassword)
     ? sessionPassword
     : fallbackPassword;
+  const channelId = normalizeRoomChannelId(roomChannelId) || getRoomChannelId(roomName);
   if (isRoomPasswordKnown(password)) {
-    await ensureRoomKey(roomName, password);
+    await ensureRoomKey(roomName, password, channelId);
   }
 
   let content = msg.content;
-  if (msg.encrypted) content = await decryptMessage(roomName, msg.content);
+  if (msg.encrypted) {
+    try {
+      content = await decryptMessage(roomName, msg.content, channelId, password);
+    } catch {
+      return {
+        ...msg,
+        type: 'text',
+        content: '…',
+        encrypted: false,
+      };
+    }
+  }
 
   const parsed = parseMessagePayload(content);
 
@@ -158,8 +178,10 @@ async function normalizeMessage(msg, roomName, fallbackPassword) {
   return { ...msg, type: 'text', content: parsed.text };
 }
 
-async function normalizeMessages(messages, roomName, roomPassword) {
-  return Promise.all(messages.map((msg) => normalizeMessage(msg, roomName, roomPassword)));
+async function normalizeMessages(messages, roomName, roomPassword, roomChannelId = '') {
+  return Promise.all(
+    messages.map((msg) => normalizeMessage(msg, roomName, roomPassword, roomChannelId)),
+  );
 }
 
 function mergeWithLocalImages(textMessages, roomName) {
@@ -207,16 +229,23 @@ function getJoinUsername() {
   return hashIndex > 0 ? stored.slice(0, hashIndex) : stored;
 }
 
+function buildSocketJoinPayload(username, roomChannelId = '') {
+  const payload = {
+    clientSessionId: getOrCreateClientSessionId(),
+    ...getJoinAvatarPayload(username),
+  };
+  const channelId = normalizeRoomChannelId(roomChannelId);
+  if (channelId) payload.roomChannelId = channelId;
+  return payload;
+}
+
 function hydrateOpenRoomsFromSession(list) {
   if (!Array.isArray(list) || list.length === 0) return {};
 
   return list.reduce((acc, entry) => {
     if (!entry?.roomName) return acc;
 
-    const needsReauth = Boolean(entry.needsPasswordReentry)
-      || (entry.password != null && !isOpenRoomPassword(entry.password));
-
-    if (needsReauth) {
+    if (entry.needsPasswordReentry) {
       acc[entry.roomName] = {
         ...emptyRoomState(null, entry.assignedUsername || ''),
         needsPasswordReentry: true,
@@ -228,11 +257,12 @@ function hydrateOpenRoomsFromSession(list) {
       return acc;
     }
 
-    if (entry.password == null || entry.password === undefined) return acc;
+    if (!isRoomPasswordKnown(entry.password)) return acc;
 
-    setRoomSession(entry.roomName, entry.password);
+    const channelId = normalizeRoomChannelId(entry.roomChannelId);
+    setRoomSession(entry.roomName, entry.password, channelId);
     acc[entry.roomName] = {
-      ...emptyRoomState(entry.password, entry.assignedUsername || ''),
+      ...emptyRoomState(entry.password, entry.assignedUsername || '', channelId),
       suspendedAt: entry.suspendedAt || null,
       lastPreview: entry.lastPreview || '',
       lastTimestamp: entry.lastTimestamp || '',
@@ -289,6 +319,7 @@ export default function ChatApp() {
   const pendingInviteRef = useRef(null);
   const usernameRef = useRef('');
   const joiningRoomsRef = useRef(new Set());
+  const joinAckTimersRef = useRef(new Map());
   const pendingMaximizeRef = useRef(new Set());
   const processedInviteRef = useRef(null);
   const rejoinAfterRoomsListRef = useRef(false);
@@ -306,6 +337,33 @@ export default function ChatApp() {
       return next;
     });
   }, []);
+
+  const clearJoinAckTimer = useCallback((roomName) => {
+    const timer = joinAckTimersRef.current.get(roomName);
+    if (timer) {
+      clearTimeout(timer);
+      joinAckTimersRef.current.delete(roomName);
+    }
+  }, []);
+
+  const scheduleJoinAckTimer = useCallback((roomName) => {
+    clearJoinAckTimer(roomName);
+    const timer = setTimeout(() => {
+      if (!joiningRoomsRef.current.has(roomName)) return;
+      joiningRoomsRef.current.delete(roomName);
+      pendingMaximizeRef.current.delete(roomName);
+      updateJoiningState();
+      setRoomError(tRef.current('errors.joinTimeout'));
+      clearRoomKey(roomName);
+      syncOpenRooms((prev) => {
+        if (!prev[roomName]) return prev;
+        const next = { ...prev };
+        delete next[roomName];
+        return next;
+      });
+    }, 25000);
+    joinAckTimersRef.current.set(roomName, timer);
+  }, [clearJoinAckTimer, syncOpenRooms, updateJoiningState]);
 
   const clearRoomUnread = useCallback((roomName) => {
     syncOpenRooms((prev) => {
@@ -345,6 +403,13 @@ export default function ChatApp() {
   useEffect(() => { openRoomsRef.current = openRooms; }, [openRooms]);
   useEffect(() => { activeRoomsRef.current = activeRooms; }, [activeRooms]);
   useEffect(() => { joinModalRef.current = joinModal; }, [joinModal]);
+
+  const resolveRoomChannelIdForRoom = useCallback((roomName) => (
+    normalizeRoomChannelId(openRoomsRef.current[roomName]?.roomChannelId)
+    || normalizeRoomChannelId(findActiveRoomMeta(activeRoomsRef.current, roomName)?.roomChannelId)
+    || getRoomChannelId(roomName)
+    || ''
+  ), []);
 
   useEffect(() => {
     const mq = window.matchMedia(`(max-width: ${COMPACT_VIEWPORT_MAX}px)`);
@@ -453,50 +518,68 @@ export default function ChatApp() {
   }, []);
 
   useEffect(() => {
-    const stored = readStoredUsername();
-    if (stored) {
-      setUsername(stored);
-      setSocketActive(true);
-      const avatar = readProfileAvatarFromStorage();
-      if (avatar) setProfileAvatar(avatar);
-    }
-    applyInviteFromUrl();
+    let cancelled = false;
 
-    const { list, activeRoom: savedActive } = loadPersistedSession();
-    if (list.length > 0) {
-      const hydrated = hydrateOpenRoomsFromSession(list);
-      openRoomsRef.current = hydrated;
-      setOpenRooms(hydrated);
-    }
+    void (async () => {
+      await initSecureBrowserStorage();
+      if (cancelled) return;
 
-    if (savedActive) {
-      activeRoomRef.current = savedActive;
-      setFocusedRoom(savedActive);
-      setExpandedRooms([savedActive]);
-      if (isCompactViewport()) {
-        setFullscreenRoom(savedActive);
+      const stored = readStoredUsername();
+      if (stored) {
+        setUsername(stored);
+        setSocketActive(true);
+        const avatar = readProfileAvatarFromStorage();
+        if (avatar) setProfileAvatar(avatar);
       }
-    }
+      applyInviteFromUrl();
 
-    setIsCompact(isCompactViewport());
-    setReady(true);
+      const { list, activeRoom: savedActive } = loadPersistedSession();
+      if (list.length > 0) {
+        const hydrated = hydrateOpenRoomsFromSession(list);
+        openRoomsRef.current = hydrated;
+        setOpenRooms(hydrated);
+      }
+
+      if (savedActive) {
+        activeRoomRef.current = savedActive;
+        setFocusedRoom(savedActive);
+        setExpandedRooms([savedActive]);
+        if (isCompactViewport()) {
+          setFullscreenRoom(savedActive);
+        }
+      }
+
+      setIsCompact(isCompactViewport());
+      setReady(true);
+    })();
 
     window.addEventListener('hashchange', applyInviteFromUrl);
-    return () => window.removeEventListener('hashchange', applyInviteFromUrl);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('hashchange', applyInviteFromUrl);
+    };
   }, [applyInviteFromUrl]);
 
+  const messageSendCooldownActive = messageSendCooldownMs > 0;
+
   useEffect(() => {
-    if (messageSendCooldownMs <= 0) return undefined;
+    if (!messageSendCooldownActive) return undefined;
 
     const tick = () => {
       const retryAfterMs = messageSendLimiterRef.current.getRetryAfterMs();
-      setMessageSendCooldownMs(retryAfterMs);
+      setMessageSendCooldownMs((prev) => {
+        if (retryAfterMs <= 0) return prev > 0 ? 0 : prev;
+        const prevSec = Math.ceil(prev / 1000);
+        const nextSec = Math.ceil(retryAfterMs / 1000);
+        if (prevSec === nextSec) return prev;
+        return retryAfterMs;
+      });
     };
 
     tick();
     const id = window.setInterval(tick, 250);
     return () => window.clearInterval(id);
-  }, [messageSendCooldownMs]);
+  }, [messageSendCooldownActive]);
 
   const appendSystemMessage = useCallback((roomName, text) => {
     if (!roomName || !text) return;
@@ -545,7 +628,10 @@ export default function ChatApp() {
       setRoomError(tRef.current('errors.usernameRequired'));
       return false;
     }
-    if (joiningRoomsRef.current.has(roomName)) return false;
+    if (joiningRoomsRef.current.has(roomName)) {
+      setRoomError(tRef.current('joinModal.connecting'));
+      return false;
+    }
 
     const existing = openRoomsRef.current[roomName];
     const meta = findActiveRoomMeta(activeRoomsRef.current, roomName);
@@ -568,36 +654,49 @@ export default function ChatApp() {
     setRoomError('');
 
     try {
-      await ensureRoomKey(roomName, resolvedPassword);
+      const meta = findActiveRoomMeta(activeRoomsRef.current, roomName);
+      const channelIdForJoin = meta
+        ? (normalizeRoomChannelId(meta.roomChannelId) || resolveRoomChannelIdForRoom(roomName))
+        : '';
+      await ensureRoomKey(roomName, resolvedPassword, channelIdForJoin);
+      setRoomSession(roomName, resolvedPassword, channelIdForJoin);
       syncOpenRooms((prev) => ({
         ...prev,
         [roomName]: {
-          ...(prev[roomName] || emptyRoomState(resolvedPassword)),
+          ...(prev[roomName] || emptyRoomState(resolvedPassword, '', channelIdForJoin)),
           password: resolvedPassword,
+          roomChannelId: channelIdForJoin,
           needsPasswordReentry: false,
         },
       }));
-      socketService.connect();
       if (!restore) {
         pendingMaximizeRef.current.add(roomName);
       }
+      await socketService.waitForConnect();
       socketService.emit('joinRoom', {
         roomName,
         password: resolvedPassword,
         username: nick,
         restore,
         noPassword: isOpenRoomPassword(resolvedPassword),
-        ...getJoinAvatarPayload(nick),
+        ...buildSocketJoinPayload(nick, channelIdForJoin),
       });
+      scheduleJoinAckTimer(roomName);
       return true;
-    } catch {
+    } catch (err) {
+      clearJoinAckTimer(roomName);
       joiningRoomsRef.current.delete(roomName);
+      pendingMaximizeRef.current.delete(roomName);
       updateJoiningState();
-      setRoomError(tRef.current('errors.e2eInit'));
+      setRoomError(
+        err?.message === 'timeout'
+          ? tRef.current('errors.noConnection')
+          : tRef.current('errors.e2eInit'),
+      );
       clearRoomKey(roomName);
       return false;
     }
-  }, [syncOpenRooms, updateJoiningState]);
+  }, [syncOpenRooms, updateJoiningState, scheduleJoinAckTimer, clearJoinAckTimer, resolveRoomChannelIdForRoom]);
 
   const joinInviteRoom = useCallback(async (invite) => {
     if (!invite?.roomName) return false;
@@ -656,16 +755,17 @@ export default function ChatApp() {
 
     for (const roomName of Object.keys(openRoomsRef.current)) {
       if (joiningRoomsRef.current.has(roomName)) continue;
+      if (pendingMaximizeRef.current.has(roomName)) continue;
       if (pendingInviteRef.current?.roomName === roomName) continue;
+      const room = openRoomsRef.current[roomName];
       if (!activeNames.has(roomName)) {
         if (isWithinSessionGrace(room?.suspendedAt)) continue;
         toRemove.push(roomName);
         continue;
       }
       const meta = findActiveRoomMeta(activeList, roomName);
-      const room = openRoomsRef.current[roomName];
       if (room?.needsPasswordReentry) continue;
-      if (meta && !roomCredentialMatchesServer(room?.password, meta)) {
+      if (meta && !roomCredentialMatchesServer(room?.password, meta, room?.roomChannelId)) {
         toRemove.push(roomName);
       }
     }
@@ -686,6 +786,14 @@ export default function ChatApp() {
     );
     const seen = new Set();
     const entries = [];
+    const { list: persistedList } = loadPersistedSession();
+    const persistedByRoom = new Map(
+      persistedList.filter((item) => item?.roomName).map((item) => [item.roomName, item]),
+    );
+    const roomNames = new Set([
+      ...Object.keys(openRoomsRef.current),
+      ...persistedList.map((item) => item?.roomName).filter(Boolean),
+    ]);
 
     const markNeedsPasswordReentry = (entry) => {
       clearRoomSession(entry.roomName);
@@ -695,6 +803,7 @@ export default function ChatApp() {
         [entry.roomName]: {
           ...(prev[entry.roomName] || emptyRoomState(null, entry.assignedUsername || '')),
           password: null,
+          roomChannelId: '',
           needsPasswordReentry: true,
           assignedUsername: entry.assignedUsername || prev[entry.roomName]?.assignedUsername || '',
           lastPreview: entry.lastPreview || prev[entry.roomName]?.lastPreview || '',
@@ -705,11 +814,36 @@ export default function ChatApp() {
       }));
     };
 
-    const considerEntry = (entry) => {
-      if (!entry?.roomName || seen.has(entry.roomName)) return;
-      seen.add(entry.roomName);
+    const considerEntry = (rawEntry) => {
+      if (!rawEntry?.roomName || seen.has(rawEntry.roomName)) return;
+      seen.add(rawEntry.roomName);
+
+      const localRoom = openRoomsRef.current[rawEntry.roomName];
+      const persisted = persistedByRoom.get(rawEntry.roomName);
+      const credential = resolveRoomCredential(rawEntry.roomName, localRoom, persisted);
+      let entry = {
+        ...rawEntry,
+        password: credential.needsPasswordReentry ? null : credential.password,
+        roomChannelId: credential.roomChannelId,
+        needsPasswordReentry: credential.needsPasswordReentry,
+        assignedUsername: rawEntry.assignedUsername
+          || localRoom?.assignedUsername
+          || persisted?.assignedUsername
+          || '',
+        lastPreview: rawEntry.lastPreview || localRoom?.lastPreview || persisted?.lastPreview || '',
+        lastTimestamp: rawEntry.lastTimestamp || localRoom?.lastTimestamp || persisted?.lastTimestamp || '',
+        unread: rawEntry.unread ?? localRoom?.unread ?? persisted?.unread ?? 0,
+      };
+
+      if (entry.needsPasswordReentry || !isRoomPasswordKnown(entry.password)) {
+        markNeedsPasswordReentry(entry);
+        return;
+      }
 
       if (!activeNames.has(entry.roomName)) {
+        if (joiningRoomsRef.current.has(entry.roomName)) return;
+        if (pendingMaximizeRef.current.has(entry.roomName)) return;
+        if (isWithinSessionGrace(localRoom?.suspendedAt)) return;
         removeOpenRoomLocally(entry.roomName);
         return;
       }
@@ -720,7 +854,7 @@ export default function ChatApp() {
         return;
       }
 
-      if (!roomCredentialMatchesServer(entry.password, meta)) {
+      if (!roomCredentialMatchesServer(entry.password, meta, entry.roomChannelId)) {
         removeOpenRoomLocally(entry.roomName);
         return;
       }
@@ -728,41 +862,19 @@ export default function ChatApp() {
       if (!canAutoRestoreRoom(entry.password, meta)) {
         if (meta.isOpen) {
           entries.push({ ...entry, password: '' });
+        } else if (isRoomPasswordKnown(entry.password)) {
+          entries.push(entry);
         } else {
           markNeedsPasswordReentry(entry);
         }
         return;
       }
 
-      if (entry.password == null || entry.password === undefined) return;
       entries.push(entry);
     };
 
-    for (const [roomName, room] of Object.entries(openRoomsRef.current)) {
-      if (room.needsPasswordReentry) {
-        considerEntry({
-          roomName,
-          password: null,
-          assignedUsername: room.assignedUsername || '',
-          lastPreview: room.lastPreview || '',
-          lastTimestamp: room.lastTimestamp || '',
-          unread: room.unread || 0,
-        });
-        continue;
-      }
-      considerEntry({
-        roomName,
-        password: room.password,
-        assignedUsername: room.assignedUsername || '',
-        lastPreview: room.lastPreview || '',
-        lastTimestamp: room.lastTimestamp || '',
-        unread: room.unread || 0,
-      });
-    }
-
-    const { list } = loadPersistedSession();
-    for (const entry of list) {
-      considerEntry(entry);
+    for (const roomName of roomNames) {
+      considerEntry({ roomName });
     }
 
     if (!entries.length) return;
@@ -777,13 +889,15 @@ export default function ChatApp() {
       if (joiningRoomsRef.current.has(entry.roomName)) continue;
 
       try {
-        await ensureRoomKey(entry.roomName, entry.password);
-        setRoomSession(entry.roomName, entry.password);
+        await ensureRoomKey(entry.roomName, entry.password, entry.roomChannelId);
+        setRoomSession(entry.roomName, entry.password, entry.roomChannelId);
         syncOpenRooms((prev) => ({
           ...prev,
           [entry.roomName]: {
-            ...(prev[entry.roomName] || emptyRoomState(entry.password, entry.assignedUsername)),
+            ...(prev[entry.roomName] || emptyRoomState(entry.password, entry.assignedUsername, entry.roomChannelId)),
             password: entry.password,
+            roomChannelId: entry.roomChannelId,
+            needsPasswordReentry: false,
             assignedUsername: entry.assignedUsername || prev[entry.roomName]?.assignedUsername || '',
             lastPreview: entry.lastPreview || prev[entry.roomName]?.lastPreview || '',
             lastTimestamp: entry.lastTimestamp || prev[entry.roomName]?.lastTimestamp || '',
@@ -796,6 +910,7 @@ export default function ChatApp() {
         prepared.push({
           roomName: entry.roomName,
           password: entry.password,
+          roomChannelId: entry.roomChannelId,
           assignedUsername: entry.assignedUsername || nick,
           noPassword: isOpenRoomPassword(entry.password),
         });
@@ -812,12 +927,19 @@ export default function ChatApp() {
     }
 
     updateJoiningState();
-    socketService.emit('restoreRooms', {
-      rooms: prepared,
-      username: nick,
-      avatarSeed: avatar.avatarSeed,
-      avatarStyle: avatar.avatarStyle,
-    });
+    try {
+      await socketService.waitForConnect();
+      socketService.emit('restoreRooms', {
+        rooms: prepared,
+        username: nick,
+        clientSessionId: getOrCreateClientSessionId(),
+        avatarSeed: avatar.avatarSeed,
+        avatarStyle: avatar.avatarStyle,
+      });
+    } catch {
+      joiningRoomsRef.current.clear();
+      updateJoiningState();
+    }
   }, [syncOpenRooms, updateJoiningState, removeOpenRoomLocally]);
 
   useEffect(() => {
@@ -825,11 +947,12 @@ export default function ChatApp() {
     void joinInviteRoom(pendingInvite);
   }, [ready, username, pendingInvite, joinInviteRoom]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!ready || !socketActive) return;
 
     const onRoomJoined = async ({
       roomName,
+      roomChannelId: joinedChannelId,
       messages: initialMessages,
       username: assignedUsername,
       quickEmoji,
@@ -841,6 +964,7 @@ export default function ChatApp() {
         clearPendingInvite();
       }
 
+      clearJoinAckTimer(roomName);
       joiningRoomsRef.current.delete(roomName);
       updateJoiningState();
 
@@ -848,13 +972,15 @@ export default function ChatApp() {
       const password = isRoomPasswordKnown(sessionPwd)
         ? sessionPwd
         : (openRoomsRef.current[roomName]?.password ?? '');
+      const channelId = normalizeRoomChannelId(joinedChannelId)
+        || resolveRoomChannelIdForRoom(roomName);
 
-      await ensureRoomKey(roomName, password);
-      setRoomSession(roomName, password);
+      await ensureRoomKey(roomName, password, channelId);
+      setRoomSession(roomName, password, channelId);
 
       const prevRoom = openRoomsRef.current[roomName];
       const serverMessages = initialMessages?.length
-        ? await normalizeMessages(initialMessages, roomName, password)
+        ? await normalizeMessages(initialMessages, roomName, password, channelId)
         : [];
       let merged = dedupeMessages(mergeWithLocalImages(
         dedupeMessages([...(prevRoom?.messages || []), ...serverMessages]),
@@ -882,8 +1008,9 @@ export default function ChatApp() {
       syncOpenRooms((prev) => ({
         ...prev,
         [roomName]: {
-          ...(prev[roomName] || emptyRoomState(password, assignedUsername)),
+          ...(prev[roomName] || emptyRoomState(password, assignedUsername, channelId)),
           password,
+          roomChannelId: channelId,
           needsPasswordReentry: false,
           suspendedAt: null,
           assignedUsername: roomNick,
@@ -948,11 +1075,13 @@ export default function ChatApp() {
       const room = openRoomsRef.current[roomName];
       if (!roomName || !room) return;
 
-      if (isRoomPasswordKnown(room.password)) {
-        await ensureRoomKey(roomName, room.password);
+      const channelId = resolveRoomChannelIdForRoom(roomName);
+      const msgPassword = resolveRoomPasswordForCrypto(roomName, room);
+      if (isRoomPasswordKnown(msgPassword)) {
+        await ensureRoomKey(roomName, msgPassword, channelId);
       }
 
-      const normalized = await normalizeMessage(message, roomName, room.password);
+      const normalized = await normalizeMessage(message, roomName, msgPassword, channelId);
       const isFocused = activeRoomRef.current === roomName;
 
       syncOpenRooms((prev) => {
@@ -1086,7 +1215,10 @@ export default function ChatApp() {
         return;
       }
 
-      if (roomName) joiningRoomsRef.current.delete(roomName);
+      if (roomName) {
+        clearJoinAckTimer(roomName);
+        joiningRoomsRef.current.delete(roomName);
+      }
 
       const isRoomGone = /nie jest już aktywny|no longer active/i.test(errMsg);
       if (isRoomGone && roomName) {
@@ -1106,7 +1238,7 @@ export default function ChatApp() {
           password: invite.password ?? '',
           username: fallbackNick,
           noPassword: isOpenRoomPassword(invite.password ?? ''),
-          ...getJoinAvatarPayload(fallbackNick),
+          ...buildSocketJoinPayload(fallbackNick, resolveRoomChannelIdForRoom(roomName)),
         });
         return;
       }
@@ -1171,6 +1303,21 @@ export default function ChatApp() {
         return;
       }
 
+      if (!roomName) {
+        setRoomError(errMsg);
+        return;
+      }
+
+      if (isNickChangeError) {
+        setRoomError(errMsg);
+        return;
+      }
+
+      if (joiningRoomsRef.current.has(roomName) || pendingMaximizeRef.current.has(roomName)) {
+        appendSystemMessage(roomName, translateRoomError(errMsg, tRef.current));
+        return;
+      }
+
       setRoomError(errMsg);
     };
 
@@ -1180,12 +1327,20 @@ export default function ChatApp() {
       setActiveRooms(normalized);
 
       const shouldRejoin = rejoinAfterRoomsListRef.current && usernameRef.current;
+      const hasPendingJoin = joiningRoomsRef.current.size > 0
+        || pendingMaximizeRef.current.size > 0;
+
       if (shouldRejoin) {
         rejoinAfterRoomsListRef.current = false;
-        void rejoinOpenRooms();
       }
 
-      pruneStaleOpenRooms(normalized);
+      if (!hasPendingJoin) {
+        if (shouldRejoin) {
+          void rejoinOpenRooms().finally(() => pruneStaleOpenRooms(normalized));
+        } else {
+          pruneStaleOpenRooms(normalized);
+        }
+      }
       syncOpenRooms((prev) => {
         let changed = false;
         const next = { ...prev };
@@ -1204,8 +1359,12 @@ export default function ChatApp() {
     };
 
     const onDisconnect = () => {
-      joiningRoomsRef.current.clear();
-      updateJoiningState();
+      if (
+        joiningRoomsRef.current.size === 0
+        && pendingMaximizeRef.current.size === 0
+      ) {
+        updateJoiningState();
+      }
       if (!usernameRef.current) return;
 
       rejoinAfterRoomsListRef.current = true;
@@ -1237,12 +1396,17 @@ export default function ChatApp() {
       onConnect,
       onDisconnect,
     };
-  }, [ready, socketActive, rejoinOpenRooms, pruneStaleOpenRooms, removeOpenRoomLocally, appendSystemMessage, syncOpenRooms, maximizeRoom, updateJoiningState, clearPendingInvite]);
+  }, [ready, socketActive, rejoinOpenRooms, pruneStaleOpenRooms, removeOpenRoomLocally, appendSystemMessage, syncOpenRooms, maximizeRoom, updateJoiningState, clearPendingInvite, clearJoinAckTimer, resolveRoomChannelIdForRoom]);
 
   const resumeChatSession = useCallback(() => {
     if (!ready || !socketActive || !usernameRef.current) return;
     socketService.ensureConnected();
-    rejoinAfterRoomsListRef.current = true;
+    if (
+      joiningRoomsRef.current.size === 0
+      && pendingMaximizeRef.current.size === 0
+    ) {
+      rejoinAfterRoomsListRef.current = true;
+    }
     socketService.emit('getRooms');
   }, [ready, socketActive]);
 
@@ -1288,11 +1452,10 @@ export default function ChatApp() {
   }, [ready, socketActive, resumeChatSession]);
 
   useEffect(() => {
-    if (ready && socketActive) return undefined;
+    if (socketActive) return undefined;
     socketService.disconnect();
-    clearRoomKey();
     return undefined;
-  }, [ready, socketActive]);
+  }, [socketActive]);
 
   const handleClearUser = useCallback(() => {
     usernameRef.current = '';
@@ -1424,7 +1587,7 @@ export default function ChatApp() {
 
     const previous = usernameRef.current;
     usernameRef.current = trimmed;
-    localStorage.setItem('username', trimmed);
+    secureLocalSetSync('username', trimmed);
     setUsername(trimmed);
     setSocketActive(true);
     scheduleProfileAvatarStorageSync();
@@ -1463,7 +1626,7 @@ export default function ChatApp() {
         username: room.assignedUsername || nick,
         restore: true,
         noPassword: isOpenRoomPassword(room.password),
-        ...getJoinAvatarPayload(nick),
+        ...buildSocketJoinPayload(nick, resolveRoomChannelIdForRoom(roomName)),
       });
     }
 
@@ -1584,7 +1747,7 @@ export default function ChatApp() {
       ?? openRoomsRef.current[roomName]?.password
       ?? '';
     handleOpenJoinModal(roomName, savedPassword);
-  }, [handleOpenJoinModal, joinRoom]);
+  }, [handleOpenJoinModal, joinRoom, resolveRoomChannelIdForRoom]);
 
   const handleJoinModalSubmit = useCallback((roomName, password, { noPassword = false } = {}) => {
     setJoinModal({ open: true, roomName, password });
@@ -1598,11 +1761,21 @@ export default function ChatApp() {
     if (!consumeMessageSendSlot(roomName)) return;
 
     try {
-      await ensureRoomKey(roomName, isRoomPasswordKnown(room.password) ? room.password : '');
+      assertE2eCryptoAvailable();
+      const password = resolveRoomPasswordForCrypto(roomName, room);
+      if (!isRoomPasswordKnown(password)) {
+        appendSystemMessage(roomName, tRef.current('errors.noPassword'));
+        return;
+      }
+      await ensureRoomKey(roomName, password);
       const encrypted = await encryptMessage(roomName, buildTextPayload(messageContent));
       socketService.emit('sendMessage', { roomName, content: encrypted, encrypted: true, type: 'text' });
-    } catch {
-      appendSystemMessage(roomName, tRef.current('errors.encryptFailed'));
+    } catch (err) {
+      if (err?.message === 'E2E_REQUIRES_HTTPS') {
+        appendSystemMessage(roomName, tRef.current('errors.e2eRequiresHttps'));
+      } else {
+        appendSystemMessage(roomName, tRef.current('errors.encryptFailed'));
+      }
     }
   }, [appendSystemMessage, consumeMessageSendSlot]);
 
@@ -1639,7 +1812,12 @@ export default function ChatApp() {
     }
 
     try {
-      await ensureRoomKey(roomName, isRoomPasswordKnown(room.password) ? room.password : '');
+      const password = resolveRoomPasswordForCrypto(roomName, room);
+      if (!isRoomPasswordKnown(password)) {
+        throw new Error(tRef.current('errors.noPassword'));
+      }
+      const channelId = resolveRoomChannelIdForRoom(roomName);
+      await ensureRoomKey(roomName, password, channelId);
       const encrypted = await encryptMessage(roomName, buildImagePayload(imageId, mime, data));
       socketService.emit('sendMessage', {
         roomName,
@@ -1745,11 +1923,14 @@ export default function ChatApp() {
     const forcedFullscreen = isCompact;
     const openChannelCount = Object.keys(openRooms).length;
     const allowMinimize = isCompact ? openChannelCount >= 1 : openChannelCount > 1;
-    const resolvedPassword = isRoomPasswordKnown(roomData.password)
+    const resolvedPassword = isRoomPasswordKnown(roomData.password) && !roomData.needsPasswordReentry
       ? roomData.password
       : (getRoomPassword(roomName) ?? '');
 
     const getSenderProfile = (sender) => resolveSenderProfile(roomData, sender, username);
+    const channelRoomState = isRoomPasswordKnown(resolvedPassword)
+      ? { password: resolvedPassword }
+      : null;
 
     return (
       <ChatWindow
@@ -1761,6 +1942,7 @@ export default function ChatApp() {
         onSendImage={(file) => handleSendImage(roomName, file)}
         roomName={roomName}
         roomPassword={resolvedPassword}
+        channelRoomState={channelRoomState}
         onLeaveRoom={() => handleLeaveRoom(roomName)}
         onMinimize={allowMinimize ? () => handleMinimizeRoom(roomName) : undefined}
         onToggleFullscreen={forcedFullscreen ? undefined : () => handleToggleFullscreen(roomName)}

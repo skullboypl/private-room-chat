@@ -16,12 +16,13 @@ import { invalidateUserAvatarCache } from '@/lib/userAvatar';
 import { createAvatarRandomizeLimiter } from '@/lib/avatarRandomizeLimit';
 import { createNicknameRandomizeLimiter } from '@/lib/nicknameRandomizeLimit';
 import { createRandomNickname } from '@/lib/randomNickname';
+import { secureLocalGetSync, secureLocalSetSync } from '@/lib/secureBrowserStorage';
 import { useTranslation } from '@/context/LocaleContext';
 import './UserNameInput.css';
 
 export function readStoredUsername() {
   if (typeof window === 'undefined') return '';
-  return localStorage.getItem('username')?.trim() || '';
+  return secureLocalGetSync('username')?.trim() || '';
 }
 
 export default function UserNameInput({
@@ -99,31 +100,46 @@ export default function UserNameInput({
     );
   }, [compact, name, syncedProfileAvatar?.avatarSeed, syncedProfileAvatar?.avatarStyle, applyAvatarState]);
 
+  const randomizeCooldownActive = randomizeCooldownMs > 0;
+  const nickRandomizeCooldownActive = nickRandomizeCooldownMs > 0;
+
   useEffect(() => {
-    if (randomizeCooldownMs <= 0) return undefined;
+    if (!randomizeCooldownActive) return undefined;
 
     const tick = () => {
       const retryAfterMs = randomizeLimiterRef.current.getRetryAfterMs();
-      setRandomizeCooldownMs(retryAfterMs);
+      setRandomizeCooldownMs((prev) => {
+        if (retryAfterMs <= 0) return prev > 0 ? 0 : prev;
+        const prevSec = Math.ceil(prev / 1000);
+        const nextSec = Math.ceil(retryAfterMs / 1000);
+        if (prevSec === nextSec) return prev;
+        return retryAfterMs;
+      });
     };
 
     tick();
     const id = window.setInterval(tick, 250);
     return () => window.clearInterval(id);
-  }, [randomizeCooldownMs]);
+  }, [randomizeCooldownActive]);
 
   useEffect(() => {
-    if (nickRandomizeCooldownMs <= 0) return undefined;
+    if (!nickRandomizeCooldownActive) return undefined;
 
     const tick = () => {
       const retryAfterMs = nickRandomizeLimiterRef.current.getRetryAfterMs();
-      setNickRandomizeCooldownMs(retryAfterMs);
+      setNickRandomizeCooldownMs((prev) => {
+        if (retryAfterMs <= 0) return prev > 0 ? 0 : prev;
+        const prevSec = Math.ceil(prev / 1000);
+        const nextSec = Math.ceil(retryAfterMs / 1000);
+        if (prevSec === nextSec) return prev;
+        return retryAfterMs;
+      });
     };
 
     tick();
     const id = window.setInterval(tick, 250);
     return () => window.clearInterval(id);
-  }, [nickRandomizeCooldownMs]);
+  }, [nickRandomizeCooldownActive]);
 
   const tryRandomizeAvatar = useCallback((applyAvatar) => {
     const result = randomizeLimiterRef.current.tryConsume();
@@ -183,7 +199,7 @@ export default function UserNameInput({
   const persistProfile = (trimmed, seed, style) => {
     writeStoredUserAvatar(seed, style);
     invalidateUserAvatarCache();
-    localStorage.setItem('username', trimmed);
+    secureLocalSetSync('username', trimmed);
     setName(trimmed);
     setAvatarSeed(seed);
     setAvatarStyle(style);

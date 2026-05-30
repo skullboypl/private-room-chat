@@ -40,7 +40,7 @@
 }
 
 .fb-layout--dock-rail .fb-main {
-  padding-right: calc(clamp(160px, 18vw, 220px) + var(--safe-right));
+  /*padding-right: calc(clamp(160px, 18vw, 220px) + var(--safe-right));*/
 }
 
 .fb-layout--fullscreen {

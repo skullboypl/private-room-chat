@@ -28,12 +28,14 @@ export default function JoinRoomModal({
   const [roomName, setRoomName] = useState(initialRoomName);
   const [password, setPassword] = useState(initialPassword);
   const [noPassword, setNoPassword] = useState(false);
+  const [validationError, setValidationError] = useState('');
 
   useEffect(() => {
     if (open) {
       setRoomName(initialRoomName);
       setPassword(initialPassword);
       setNoPassword(false);
+      setValidationError('');
     }
   }, [open, initialRoomName, initialPassword]);
 
@@ -52,8 +54,13 @@ export default function JoinRoomModal({
   const handleSubmit = (e) => {
     e.preventDefault();
     if (joining) return;
+    setValidationError('');
+
     const name = trimmedRoomName;
-    if (!name) return;
+    if (!name) {
+      setValidationError(t('joinModal.roomNameRequired'));
+      return;
+    }
 
     if (targetIsOpen || canCreateOpen) {
       onJoin(name, '', { noPassword: true });
@@ -61,18 +68,27 @@ export default function JoinRoomModal({
     }
 
     const pwd = password.trim();
-    if (name && pwd) onJoin(name, pwd);
+    if (!pwd) {
+      setValidationError(t('errors.noPassword'));
+      return;
+    }
+
+    onJoin(name, pwd);
   };
 
   const handleRoomNameChange = (value) => {
     setRoomName(value);
+    setValidationError('');
     onClearError?.();
   };
 
   const handlePasswordChange = (value) => {
     setPassword(value);
+    setValidationError('');
     onClearError?.();
   };
+
+  const displayError = validationError || error;
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="join-title" onClick={onClose}>
@@ -162,7 +178,11 @@ export default function JoinRoomModal({
                   : t('joinModal.submitEnter')}
           </button>
         </form>
-        {error && <p className="error-message modal-form__error" role="alert">{translateRoomError(error, t)}</p>}
+        {displayError && (
+          <p className="error-message modal-form__error" role="alert">
+            {translateRoomError(displayError, t)}
+          </p>
+        )}
       </div>
     </div>
   );

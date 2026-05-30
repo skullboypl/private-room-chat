@@ -9,10 +9,12 @@ import {
 } from '@/lib/discoverRoomSort';
 import RoomAvatar from '@/components/RoomAvatar';
 import {
+  getRoomDeletesAt,
   isRoomOpenChannel,
   normalizeActiveRoomsList,
   resolveRoomUserCount,
 } from '@/lib/roomAccess';
+import EmptyRoomCountdown from '@/components/EmptyRoomCountdown';
 import { useTranslation } from '@/context/LocaleContext';
 import './ConversationList.css';
 
@@ -234,11 +236,18 @@ export default function ConversationList({
           ) : (
             <>
               <ul className="conv-bubbles conv-bubbles--discover">
-                {discoverPageItems.map((room) => (
+                {discoverPageItems.map((room) => {
+                  const deletesAt = room.deletesAt ?? getRoomDeletesAt(discoverRooms, room.roomName);
+                  const isEmptyClosing = (room.userCount ?? 0) === 0 && deletesAt;
+                  return (
                   <li key={room.roomName}>
                     <button
                       type="button"
-                      className="conv-bubble conv-bubble--discover"
+                      className={[
+                        'conv-bubble',
+                        'conv-bubble--discover',
+                        isEmptyClosing ? 'conv-bubble--empty-closing' : '',
+                      ].filter(Boolean).join(' ')}
                       onClick={() => onJoinDiscoverRoom(room.roomName)}
                     >
                       <RoomLockIcon
@@ -260,25 +269,34 @@ export default function ConversationList({
                         <span className="conv-bubble__top">
                           <span className="conv-bubble__name-col">
                             <span className="conv-bubble__name">{room.roomName}</span>
-                            <span
-                              className="conv-bubble__subtitle conv-bubble__subtitle--discover"
-                              title={t('conversations.roomUsersAria', {
-                                count: String(room.userCount ?? 0),
-                              })}
-                            >
-                              {t('conversations.roomUsers', {
-                                count: String(room.userCount ?? 0),
-                              })}
-                            </span>
+                            {isEmptyClosing ? (
+                              <EmptyRoomCountdown deletesAt={deletesAt} compact />
+                            ) : (
+                              <span
+                                className="conv-bubble__subtitle conv-bubble__subtitle--discover"
+                                title={t('conversations.roomUsersAria', {
+                                  count: String(room.userCount ?? 0),
+                                })}
+                              >
+                                {t('conversations.roomUsers', {
+                                  count: String(room.userCount ?? 0),
+                                })}
+                              </span>
+                            )}
                           </span>
                         </span>
                         <span className="conv-bubble__preview-wrap">
-                          <span className="conv-bubble__preview">{t('conversations.clickToJoin')}</span>
+                          <span className="conv-bubble__preview">
+                            {isEmptyClosing
+                              ? t('conversations.roomEmptyBadge')
+                              : t('conversations.clickToJoin')}
+                          </span>
                         </span>
                       </span>
                     </button>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
 
               {showDiscoverPagination && (

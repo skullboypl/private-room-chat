@@ -449,9 +449,28 @@
   border-color: rgba(99, 102, 241, 0.2);
 }
 
+.conv-bubble--empty-closing {
+  border-color: rgba(232, 163, 23, 0.35);
+  background: linear-gradient(
+    135deg,
+    rgba(232, 163, 23, 0.07) 0%,
+    var(--bg-card) 58%
+  );
+}
+
+.conv-bubble--empty-closing .conv-bubble__preview {
+  color: var(--vxh-warn, #e8a317);
+  font-weight: 600;
+}
+
 .conv-bubble--discover .conv-bubble__preview {
   background: rgba(16, 185, 129, 0.1);
   border-color: rgba(16, 185, 129, 0.15);
+}
+
+.conv-bubble--empty-closing.conv-bubble--discover .conv-bubble__preview {
+  background: rgba(232, 163, 23, 0.12);
+  border-color: rgba(232, 163, 23, 0.22);
 }
 
 .conv-bubble__badge {
