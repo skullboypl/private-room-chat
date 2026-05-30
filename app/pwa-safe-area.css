@@ -76,14 +76,15 @@
       overflow: hidden;
     }
 
-    .site-shell--pwa .app--messenger-full {
+    html.html--mobile-chat .site-shell--pwa .app--messenger-full {
       flex: 1 1 auto;
       min-height: 0;
       height: 100%;
       overflow: hidden;
     }
 
-    .site-shell--pwa .fb-layout {
+    html.html--mobile-chat .site-shell--pwa .fb-layout--fullscreen {
+      flex: 1 1 auto;
       min-height: 0;
       height: 100%;
     }

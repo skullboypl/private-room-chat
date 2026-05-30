@@ -13,14 +13,18 @@
   padding: 0;
   flex: 1 1 auto;
   width: 100%;
-  height: 100dvh;
-  min-height: 100dvh;
   display: flex;
   flex-direction: column;
+}
+
+/* Pełnoekranowy czat — tylko wtedy blokada wysokości viewportu */
+.app--messenger-full:has(> .fb-layout--fullscreen) {
+  height: 100dvh;
+  min-height: 100dvh;
   overflow: hidden;
 }
 
-.app--messenger-full > .fb-layout {
+.app--messenger-full:has(> .fb-layout--fullscreen) > .fb-layout {
   flex: 1 1 auto;
   width: 100%;
   min-height: 0;

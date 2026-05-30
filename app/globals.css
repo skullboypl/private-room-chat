@@ -175,7 +175,7 @@ input {
   min-height: 100dvh;
 }
 
-.site-shell:has(.app--messenger-full) {
+.site-shell:has(.fb-layout--fullscreen) {
   height: 100dvh;
   min-height: 100dvh;
   overflow: hidden;

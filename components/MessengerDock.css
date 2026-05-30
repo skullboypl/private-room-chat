@@ -1,42 +1,7 @@
 .fb-layout {
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  grid-template-columns: minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   width: 100%;
-  min-height: 100vh;
-  min-height: 100dvh;
-}
-
-.fb-layout--with-room-bar {
-  grid-template-rows: auto auto 1fr auto;
-}
-
-.fb-layout:not(.fb-layout--with-room-bar) .fb-topbar {
-  grid-row: 1;
-}
-
-.fb-layout:not(.fb-layout--with-room-bar) .fb-main {
-  grid-row: 2;
-}
-
-.fb-layout:not(.fb-layout--with-room-bar) .app-site-footer--dock {
-  grid-row: 3;
-}
-
-.fb-layout--with-room-bar .fb-topbar {
-  grid-row: 1;
-}
-
-.fb-layout--with-room-bar .fb-room-bar {
-  grid-row: 2;
-}
-
-.fb-layout--with-room-bar .fb-main {
-  grid-row: 3;
-}
-
-.fb-layout--with-room-bar .app-site-footer--dock {
-  grid-row: 4;
 }
 
 .fb-layout--dock-rail .fb-main {
@@ -44,10 +9,9 @@
 }
 
 .fb-layout--fullscreen {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
+  flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -482,17 +446,15 @@
 .fb-main {
   display: flex;
   flex-direction: column;
+  flex: 0 0 auto;
   width: 100%;
-  min-height: 0;
   padding: 1rem 1.25rem 1.5rem;
-  overflow-y: auto;
 }
 
 .fb-main__inner {
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
+  flex: 0 0 auto;
   align-self: center;
   box-sizing: border-box;
   max-width: 720px;
