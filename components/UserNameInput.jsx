@@ -54,10 +54,24 @@ export default function UserNameInput({
   const [randomizeCooldownMs, setRandomizeCooldownMs] = useState(0);
   const [nickRandomizeCooldownMs, setNickRandomizeCooldownMs] = useState(0);
 
-  const syncAvatarFromStorage = useCallback(() => {
-    setAvatarSeed(readStoredUserAvatarSeed() || ensureStoredUserAvatar());
-    setAvatarStyle(readStoredUserAvatarStyle());
+  const applyAvatarState = useCallback((seed, style, { persist = false } = {}) => {
+    setAvatarSeed(seed);
+    setAvatarStyle(style);
+    if (persist) {
+      writeStoredUserAvatar(seed, style);
+      invalidateUserAvatarCache();
+    }
   }, []);
+
+  const syncAvatarFromStorage = useCallback(() => {
+    const storedSeed = readStoredUserAvatarSeed();
+    if (storedSeed) {
+      applyAvatarState(storedSeed, readStoredUserAvatarStyle());
+      return;
+    }
+    const { seed, style } = createRandomAvatar();
+    applyAvatarState(seed, style);
+  }, [applyAvatarState]);
 
   useEffect(() => {
     const stored = readStoredUsername();
@@ -67,16 +81,24 @@ export default function UserNameInput({
       syncAvatarFromStorage();
     } else {
       setName('');
-      ensureStoredUserAvatar();
-      syncAvatarFromStorage();
+      const storedSeed = readStoredUserAvatarSeed();
+      if (storedSeed) {
+        applyAvatarState(storedSeed, readStoredUserAvatarStyle());
+      } else {
+        const { seed, style } = createRandomAvatar();
+        applyAvatarState(seed, style);
+      }
     }
-  }, [initialName, syncAvatarFromStorage]);
+  }, [initialName, syncAvatarFromStorage, applyAvatarState]);
 
   useEffect(() => {
+    if (!compact || !name) return;
     if (!syncedProfileAvatar?.avatarSeed) return;
-    setAvatarSeed(syncedProfileAvatar.avatarSeed);
-    setAvatarStyle(syncedProfileAvatar.avatarStyle || readStoredUserAvatarStyle());
-  }, [syncedProfileAvatar?.avatarSeed, syncedProfileAvatar?.avatarStyle]);
+    applyAvatarState(
+      syncedProfileAvatar.avatarSeed,
+      syncedProfileAvatar.avatarStyle || readStoredUserAvatarStyle(),
+    );
+  }, [compact, name, syncedProfileAvatar?.avatarSeed, syncedProfileAvatar?.avatarStyle, applyAvatarState]);
 
   useEffect(() => {
     if (randomizeCooldownMs <= 0) return undefined;
@@ -113,6 +135,7 @@ export default function UserNameInput({
 
     const { seed, style } = createRandomAvatar();
     applyAvatar(seed, style);
+    writeStoredUserAvatar(seed, style);
     invalidateUserAvatarCache();
     setRandomizeCooldownMs(0);
     return true;
@@ -203,8 +226,13 @@ export default function UserNameInput({
     const trimmed = name.trim();
     if (!trimmed) return;
 
-    const seed = avatarSeed || ensureStoredUserAvatar();
-    const style = avatarStyle || readStoredUserAvatarStyle();
+    let seed = avatarSeed || readStoredUserAvatarSeed();
+    let style = avatarStyle || readStoredUserAvatarStyle();
+    if (!seed) {
+      const created = createRandomAvatar();
+      seed = created.seed;
+      style = created.style;
+    }
     persistProfile(trimmed, seed, style);
   };
 
@@ -217,7 +245,7 @@ export default function UserNameInput({
     ? Math.max(1, Math.ceil(nickRandomizeCooldownMs / 1000))
     : 0;
 
-  const displaySeed = avatarSeed || ensureStoredUserAvatar();
+  const displaySeed = avatarSeed || readStoredUserAvatarSeed();
   const displayStyle = avatarStyle;
   const hasPriorSession = Boolean(readStoredUsername());
 
@@ -239,8 +267,7 @@ export default function UserNameInput({
           size="md"
           onClick={() => {
             tryRandomizeAvatar((seed, style) => {
-              setAvatarSeed(seed);
-              setAvatarStyle(style);
+              applyAvatarState(seed, style, { persist: true });
             });
           }}
           disabled={randomizeDisabled}

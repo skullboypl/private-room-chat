@@ -14,6 +14,7 @@ import { socketService } from '@/lib/socket/client';
 import { useTranslation } from '@/context/LocaleContext';
 import { formatAppTime } from '@/lib/i18n/locale';
 import { normalizeRoomUsersList } from '@/lib/roomUsersList';
+import { COMPACT_VIEWPORT_MAX } from '@/lib/viewport';
 import UserAvatar from '@/components/UserAvatar';
 import './ChannelOptionsMenu.css';
 
@@ -34,8 +35,23 @@ export default function ChannelOptionsMenu({
   const [quickEmoji, setQuickEmoji] = useState(DEFAULT_QUICK_EMOJI);
   const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState('info');
+  const [hideEmojiTab, setHideEmojiTab] = useState(false);
 
   const password = getRoomPassword(roomName) || '';
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${COMPACT_VIEWPORT_MAX}px)`);
+    const update = () => setHideEmojiTab(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
+  useEffect(() => {
+    if (hideEmojiTab && activeTab === 'emoji') {
+      setActiveTab('info');
+    }
+  }, [hideEmojiTab, activeTab]);
 
   const updatePosition = useCallback(() => {
     const anchor = anchorRef?.current;
@@ -183,13 +199,15 @@ export default function ChannelOptionsMenu({
         >
           {t('channelMenu.tabUsers')}
         </button>
-        <button
-          type="button"
-          className={activeTab === 'emoji' ? 'active' : ''}
-          onClick={() => setActiveTab('emoji')}
-        >
-          {t('channelMenu.tabEmoji')}
-        </button>
+        {!hideEmojiTab ? (
+          <button
+            type="button"
+            className={activeTab === 'emoji' ? 'active' : ''}
+            onClick={() => setActiveTab('emoji')}
+          >
+            {t('channelMenu.tabEmoji')}
+          </button>
+        ) : null}
       </div>
 
       <div className="channel-options-body">
