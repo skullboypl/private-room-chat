@@ -417,6 +417,11 @@ export default function ChatApp() {
     if (stored) {
       setUsername(stored);
       setSocketActive(true);
+      if (readStoredUserAvatarSeed()) {
+        writeStoredUserAvatar(readStoredUserAvatarSeed(), readStoredUserAvatarStyle());
+      } else {
+        ensureStoredUserAvatar();
+      }
     }
     applyInviteFromUrl();
 
@@ -601,6 +606,7 @@ export default function ChatApp() {
 
     socketService.connect();
 
+    const avatar = getJoinAvatarPayload();
     const prepared = [];
 
     for (const entry of entries) {
@@ -646,6 +652,8 @@ export default function ChatApp() {
     socketService.emit('restoreRooms', {
       rooms: prepared,
       username: nick,
+      avatarSeed: avatar.avatarSeed,
+      avatarStyle: avatar.avatarStyle,
     });
   }, [syncOpenRooms, updateJoiningState]);
 
@@ -1081,6 +1089,13 @@ export default function ChatApp() {
   }, [syncOpenRooms, updateJoiningState, pipRooms, closePiP]);
 
   const syncedProfileAvatar = useMemo(() => {
+    const storedSeed = readStoredUserAvatarSeed();
+    if (storedSeed) {
+      return {
+        avatarSeed: storedSeed,
+        avatarStyle: readStoredUserAvatarStyle(),
+      };
+    }
     for (const room of Object.values(openRooms)) {
       const nick = room.assignedUsername;
       if (!nick) continue;

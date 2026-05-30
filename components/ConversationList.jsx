@@ -43,6 +43,7 @@ export default function ConversationList({
   const { t } = useTranslation();
   const [discoverQuery, setDiscoverQuery] = useState('');
   const [discoverSort, setDiscoverSort] = useState(DISCOVER_SORT_NAME);
+  const [discoverOpenOnly, setDiscoverOpenOnly] = useState(false);
   const [discoverPage, setDiscoverPage] = useState(0);
 
   const conversations = sortConversations(
@@ -60,10 +61,16 @@ export default function ConversationList({
   );
 
   const discoverFiltered = useMemo(() => {
+    let list = discoverAll;
+    if (discoverOpenOnly) {
+      list = list.filter((room) => room.isOpen);
+    }
     const q = discoverQuery.trim().toLowerCase();
-    if (!q) return discoverAll;
-    return discoverAll.filter((room) => room.roomName.toLowerCase().includes(q));
-  }, [discoverAll, discoverQuery]);
+    if (q) {
+      list = list.filter((room) => room.roomName.toLowerCase().includes(q));
+    }
+    return list;
+  }, [discoverAll, discoverQuery, discoverOpenOnly]);
 
   const totalDiscoverPages = Math.max(1, Math.ceil(discoverFiltered.length / DISCOVER_PAGE_SIZE));
   const safeDiscoverPage = Math.min(discoverPage, totalDiscoverPages - 1);
@@ -75,7 +82,7 @@ export default function ConversationList({
 
   useEffect(() => {
     setDiscoverPage(0);
-  }, [discoverQuery, discoverSort]);
+  }, [discoverQuery, discoverSort, discoverOpenOnly]);
 
   useEffect(() => {
     if (discoverPage > totalDiscoverPages - 1) {
@@ -162,7 +169,7 @@ export default function ConversationList({
           <div className="conv-section__header">
             <h2 id="discover-heading" className="conv-section__title">{t('conversations.activeRooms')}</h2>
             <span className="conv-section__count">
-              {discoverQuery.trim()
+              {discoverQuery.trim() || discoverOpenOnly
                 ? `${discoverFiltered.length}/${discoverAll.length}`
                 : discoverAll.length}
             </span>
@@ -191,25 +198,38 @@ export default function ConversationList({
                 </button>
               )}
             </label>
-            <label className="conv-discover-sort">
-              <span className="conv-discover-sort__label">{t('conversations.sortLabel')}</span>
-              <select
-                value={discoverSort}
-                onChange={(e) => setDiscoverSort(e.target.value)}
-                aria-label={t('conversations.sortLabel')}
-              >
-                {DISCOVER_SORT_OPTIONS.map((mode) => (
-                  <option key={mode} value={mode}>
-                    {t(SORT_I18N_KEY[mode])}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="conv-discover-toolbar__filters">
+              <label className="conv-discover-sort">
+                <span className="conv-discover-sort__label">{t('conversations.sortLabel')}</span>
+                <select
+                  value={discoverSort}
+                  onChange={(e) => setDiscoverSort(e.target.value)}
+                  aria-label={t('conversations.sortLabel')}
+                >
+                  {DISCOVER_SORT_OPTIONS.map((mode) => (
+                    <option key={mode} value={mode}>
+                      {t(SORT_I18N_KEY[mode])}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="conv-discover-filter-open">
+                <input
+                  type="checkbox"
+                  checked={discoverOpenOnly}
+                  onChange={(e) => setDiscoverOpenOnly(e.target.checked)}
+                  aria-label={t('conversations.filterOpenOnlyAria')}
+                />
+                <span>{t('conversations.filterOpenOnly')}</span>
+              </label>
+            </div>
           </div>
 
           {discoverFiltered.length === 0 ? (
             <p className="conv-section__empty conv-section__empty--discover">
-              {t('conversations.noSearchResults')}
+              {discoverOpenOnly && !discoverQuery.trim()
+                ? t('conversations.noOpenRoomsFilter')
+                : t('conversations.noSearchResults')}
             </p>
           ) : (
             <>
