@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import Message from '@/components/Message';
 import MessageInput from '@/components/MessageInput';
 import ChatShare from '@/components/ChatShare';
@@ -40,6 +40,7 @@ export default function ChatWindow({
   const { t } = useTranslation();
   const messagesEndRef = useRef(null);
   const titleBtnRef = useRef(null);
+  const inputFocusedRef = useRef(false);
   const [channelMenuOpen, setChannelMenuOpen] = useState(false);
   const displayName = assignedUsername || currentUsername;
   const channelIsOpen = isRoomOpenChannel(
@@ -118,6 +119,38 @@ export default function ChatWindow({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const scrollMessagesToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ block: 'end', behavior: 'auto' });
+  }, []);
+
+  const handleInputFocus = useCallback(() => {
+    inputFocusedRef.current = true;
+    scrollMessagesToBottom();
+  }, [scrollMessagesToBottom]);
+
+  const handleInputBlur = useCallback(() => {
+    inputFocusedRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    if (!isFullscreen || typeof window === 'undefined') return undefined;
+
+    const vv = window.visualViewport;
+    if (!vv) return undefined;
+
+    const onViewportChange = () => {
+      if (!inputFocusedRef.current) return;
+      scrollMessagesToBottom();
+    };
+
+    vv.addEventListener('resize', onViewportChange);
+    vv.addEventListener('scroll', onViewportChange);
+    return () => {
+      vv.removeEventListener('resize', onViewportChange);
+      vv.removeEventListener('scroll', onViewportChange);
+    };
+  }, [isFullscreen, scrollMessagesToBottom]);
 
   const isDock = variant === 'dock';
   const isPanel = variant === 'panel';
@@ -264,6 +297,8 @@ export default function ChatWindow({
         onSendImage={onSendImage}
         compact={useCompactInput}
         sendCooldownSeconds={sendCooldownSeconds}
+        onInputFocus={isFullscreen ? handleInputFocus : undefined}
+        onInputBlur={isFullscreen ? handleInputBlur : undefined}
       />
 
       <ChannelOptionsMenu

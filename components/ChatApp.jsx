@@ -477,6 +477,8 @@ export default function ChatApp() {
   useEffect(() => {
     if (!ready || !username || !isCompact) return;
     if (mobileChatsCollapsed) return;
+    if (pendingInviteRef.current) return;
+    if (pendingMaximizeRef.current.size > 0) return;
 
     const active = (focusedRoom && openRooms[focusedRoom])
       ? focusedRoom
@@ -532,6 +534,7 @@ export default function ChatApp() {
         if (avatar) setProfileAvatar(avatar);
       }
       applyInviteFromUrl();
+      const hasPendingInvite = Boolean(pendingInviteRef.current);
 
       const { list, activeRoom: savedActive } = loadPersistedSession();
       if (list.length > 0) {
@@ -540,13 +543,16 @@ export default function ChatApp() {
         setOpenRooms(hydrated);
       }
 
-      if (savedActive) {
+      if (savedActive && !hasPendingInvite) {
         activeRoomRef.current = savedActive;
         setFocusedRoom(savedActive);
         setExpandedRooms([savedActive]);
         if (isCompactViewport()) {
           setFullscreenRoom(savedActive);
         }
+      } else if (hasPendingInvite && isCompactViewport()) {
+        setFullscreenRoom(null);
+        setMobileChatsCollapsed(false);
       }
 
       setIsCompact(isCompactViewport());

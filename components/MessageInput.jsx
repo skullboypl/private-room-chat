@@ -21,6 +21,8 @@ export default function MessageInput({
   quickEmoji: quickEmojiProp,
   compact = false,
   sendCooldownSeconds = 0,
+  onInputFocus,
+  onInputBlur,
 }) {
   const { t, lang } = useTranslation();
   const [message, setMessage] = useState('');
@@ -130,6 +132,16 @@ export default function MessageInput({
     setMessage((prev) => prev + unicode);
   }, []);
 
+  const handleTextareaFocus = useCallback(() => {
+    onInputFocus?.();
+    requestAnimationFrame(() => onInputFocus?.());
+    window.setTimeout(() => onInputFocus?.(), 150);
+  }, [onInputFocus]);
+
+  const handleTextareaBlur = useCallback(() => {
+    onInputBlur?.();
+  }, [onInputBlur]);
+
   return (
     <form
       ref={formRef}
@@ -153,6 +165,8 @@ export default function MessageInput({
           onChange={(e) => setMessage(e.target.value)}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
+          onFocus={handleTextareaFocus}
+          onBlur={handleTextareaBlur}
           placeholder={t('chat.messagePlaceholder')}
           aria-label={t('chat.messageAria')}
           className="message-input-field"
