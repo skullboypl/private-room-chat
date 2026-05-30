@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { buildInviteLink, copyToClipboard } from '@/lib/invite';
+import { isOpenRoomPassword } from '@/lib/roomAccess';
 import { useTranslation } from '@/context/LocaleContext';
 import './ChatShare.css';
 
@@ -34,11 +35,12 @@ export default function ChatShare({ roomName, roomPassword }) {
         type="button"
         className="chat-share__btn"
         onClick={async () => {
-          if (!roomPassword) return;
+          if (roomPassword == null || roomPassword === undefined) return;
           await copyToClipboard(buildInviteLink(roomName, roomPassword));
           showToast(t('chat.shareCopied'));
         }}
-        title={t('chat.shareLink')}
+        title={isOpenRoomPassword(roomPassword) ? t('chat.shareLinkOpen') : t('chat.shareLink')}
+        aria-label={isOpenRoomPassword(roomPassword) ? t('chat.shareLinkOpen') : t('chat.shareLink')}
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
           <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />

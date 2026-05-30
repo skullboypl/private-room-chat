@@ -49,11 +49,12 @@ export default function InfoFooter({ lang = 'pl' }) {
             </span>
           ))}
         </p>
-        <div className="seo-footer__legal">
-          {ui.footerDisclaimer.map((paragraph) => (
-            <p key={paragraph}>{paragraph}</p>
-          ))}
-        </div>
+        <p className="seo-footer__legal">
+          {ui.footerDisclaimerShort}{' '}
+          <Link href={wikiPath(lang, ui.footerDisclaimerMoreSlug)} className="seo-footer__legal-link">
+            {ui.footerDisclaimerMore}
+          </Link>
+        </p>
       </div>
 
       <div className="seo-footer__bottom">

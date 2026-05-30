@@ -7,11 +7,12 @@ import { useOptionalTranslation } from '@/context/LocaleContext';
 export default function ClearBrowserDataButton({ className = '', lang }) {
   const { t } = useOptionalTranslation(lang);
 
-  const handleClick = () => {
+  const handleClick = async () => {
     if (!window.confirm(t('footer.clearConfirm'))) return;
-    clearAllBrowserChatData();
+    await clearAllBrowserChatData();
     socketService.disconnect();
-    window.location.href = '/';
+    // Pełne przeładowanie (w PWA samo href='/' zostawia obrazy w pamięci React).
+    window.location.href = `/?cleared=${Date.now()}`;
   };
 
   return (

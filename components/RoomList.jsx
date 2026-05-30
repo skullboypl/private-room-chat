@@ -1,5 +1,6 @@
 'use client';
 
+import RoomAvatar from '@/components/RoomAvatar';
 import { useTranslation } from '@/context/LocaleContext';
 import './RoomList.css';
 
@@ -26,9 +27,7 @@ export default function RoomList({ rooms, onSelectRoom }) {
           {rooms.map((roomName) => (
             <li key={roomName}>
               <button type="button" className="conv-item" onClick={() => onSelectRoom(roomName)}>
-                <span className="conv-item__avatar" aria-hidden="true">
-                  {roomName.charAt(0).toUpperCase()}
-                </span>
+                <RoomAvatar roomName={roomName} className="conv-item__avatar" />
                 <span className="conv-item__body">
                   <span className="conv-item__row">
                     <span className="conv-item__name">{roomName}</span>

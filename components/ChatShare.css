@@ -54,9 +54,18 @@
     display: none;
   }
 
+  .chat-window--panel.chat-window--fullscreen .chat-share__label {
+    display: inline;
+  }
+
   .chat-share__btn {
     padding: 0.35rem;
     min-width: 1.75rem;
     justify-content: center;
+  }
+
+  .chat-window--panel.chat-window--fullscreen .chat-share__btn {
+    padding: 0.32rem 0.48rem;
+    min-width: auto;
   }
 }

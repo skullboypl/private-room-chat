@@ -1,0 +1,120 @@
+/* iOS 11 — constant() przed env() */
+:root {
+  --safe-top: constant(safe-area-inset-top);
+  --safe-right: constant(safe-area-inset-right);
+  --safe-bottom: constant(safe-area-inset-bottom);
+  --safe-left: constant(safe-area-inset-left);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+/* Pasek pod status barem / wyspą — tło za elementami UI */
+.pwa-safe-fill-top {
+  position: relative;
+}
+
+.pwa-safe-fill-top::before {
+  content: '';
+  position: absolute;
+  top: calc(-1 * var(--safe-top));
+  left: calc(-1 * var(--safe-left));
+  right: calc(-1 * var(--safe-right));
+  height: var(--safe-top);
+  background: inherit;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.pwa-safe-fill-top > * {
+  position: relative;
+  z-index: 1;
+}
+
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  @media (max-width: 720px) {
+    .site-shell--pwa {
+      box-sizing: border-box;
+      min-height: 100dvh;
+      height: 100dvh;
+      padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+      overflow: hidden;
+    }
+
+    html.html--mobile-chat .site-shell--pwa {
+      padding: 0;
+      height: 100%;
+      min-height: 0;
+    }
+
+    .site-shell--pwa .app--messenger-full {
+      flex: 1 1 auto;
+      min-height: 0;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .site-shell--pwa .fb-layout {
+      min-height: 0;
+      height: 100%;
+    }
+
+    .site-shell--pwa .fb-topbar {
+      padding-top: 0.65rem;
+    }
+
+    .site-shell--pwa .fb-layout--fullscreen > .fb-room-bar {
+      padding-top: 0.5rem;
+    }
+
+    .site-shell--pwa .fb-layout--fullscreen-tabs .chat-window--panel.chat-window--fullscreen .chat-header {
+      padding-top: 0.5rem;
+    }
+
+    .site-shell--pwa .welcome__body {
+      padding-top: 1.5rem;
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+
+    .site-shell--pwa .pwa-install {
+      bottom: max(1.25rem, var(--safe-bottom));
+    }
+  }
+}
+
+/* Pełnoekranowy czat — bez inset:0 pod wyspą */
+@media (max-width: 720px) {
+  html.html--mobile-chat body.body--mobile-chat {
+    top: var(--safe-top);
+    right: var(--safe-right);
+    bottom: var(--safe-bottom);
+    left: var(--safe-left);
+    width: auto;
+    height: auto;
+  }
+
+  html.html--mobile-chat .fb-layout--fullscreen {
+    position: fixed;
+    top: var(--safe-top);
+    right: var(--safe-right);
+    bottom: var(--safe-bottom);
+    left: var(--safe-left);
+    width: auto;
+    height: auto;
+    max-height: none;
+  }
+
+  html.html--mobile-chat .fb-layout--fullscreen > .fb-room-bar {
+    padding-top: max(0.5rem, var(--safe-top));
+  }
+
+  html.pwa-standalone.html--mobile-chat .fb-layout--fullscreen > .fb-room-bar {
+    padding-top: 0.5rem;
+  }
+
+  html.html--mobile-chat .fb-layout--fullscreen-tabs .chat-window--panel.chat-window--fullscreen .chat-header {
+    padding-top: 0.875rem;
+  }
+}

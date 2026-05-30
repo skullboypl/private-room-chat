@@ -52,7 +52,14 @@ function measureEmojiPickerLayout(formEl, compact) {
   return { below, maxHeight: Math.floor(maxHeight) };
 }
 
-export default function MessageInput({ onSendMessage, onSendImage, roomName = '', quickEmoji: quickEmojiProp, compact = false }) {
+export default function MessageInput({
+  onSendMessage,
+  onSendImage,
+  roomName = '',
+  quickEmoji: quickEmojiProp,
+  compact = false,
+  sendCooldownSeconds = 0,
+}) {
   const { t, lang } = useTranslation();
   const [message, setMessage] = useState('');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -103,12 +110,15 @@ export default function MessageInput({ onSendMessage, onSendImage, roomName = ''
     });
   }, []);
 
+  const sendBlocked = sendCooldownSeconds > 0;
+
   const sendMessage = useCallback(() => {
+    if (sendBlocked) return;
     const trimmed = message.trim();
     if (!trimmed) return;
     onSendMessage(trimmed);
     clearMessage();
-  }, [message, onSendMessage, clearMessage]);
+  }, [message, onSendMessage, clearMessage, sendBlocked]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -123,12 +133,13 @@ export default function MessageInput({ onSendMessage, onSendImage, roomName = ''
   };
 
   const handleQuickEmoji = useCallback(() => {
+    if (sendBlocked) return;
     onSendMessage(quickEmoji);
     setShowEmojiPicker(false);
-  }, [onSendMessage, quickEmoji]);
+  }, [onSendMessage, quickEmoji, sendBlocked]);
 
   const sendImageFile = useCallback(async (file) => {
-    if (!file || !onSendImage) return;
+    if (sendBlocked || !file || !onSendImage) return;
     setUploadError('');
     try {
       await onSendImage(file);
@@ -136,7 +147,7 @@ export default function MessageInput({ onSendMessage, onSendImage, roomName = ''
       setUploadError(translateRoomError(err.message, t) || t('errors.imageUpload'));
       setTimeout(() => setUploadError(''), 3000);
     }
-  }, [onSendImage, t]);
+  }, [onSendImage, t, sendBlocked]);
 
   const handleImageSelect = async (e) => {
     const file = e.target.files?.[0];
@@ -234,7 +245,13 @@ export default function MessageInput({ onSendMessage, onSendImage, roomName = ''
         </button>
 
         {hasText ? (
-          <button type="submit" className="message-input-action message-input-action--send" aria-label={t('chat.sendMessage')} title={t('chat.sendMessage')}>
+          <button
+            type="submit"
+            className="message-input-action message-input-action--send"
+            disabled={sendBlocked}
+            aria-label={sendBlocked ? t('errors.messageRateLimitWait', { seconds: sendCooldownSeconds }) : t('chat.sendMessage')}
+            title={sendBlocked ? t('errors.messageRateLimitWait', { seconds: sendCooldownSeconds }) : t('chat.sendMessage')}
+          >
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
             </svg>
@@ -244,8 +261,9 @@ export default function MessageInput({ onSendMessage, onSendImage, roomName = ''
             type="button"
             className="message-input-action message-input-action--like"
             onClick={handleQuickEmoji}
-            aria-label={t('chat.sendEmoji', { emoji: quickEmoji })}
-            title={t('chat.sendEmoji', { emoji: quickEmoji })}
+            disabled={sendBlocked}
+            aria-label={sendBlocked ? t('errors.messageRateLimitWait', { seconds: sendCooldownSeconds }) : t('chat.sendEmoji', { emoji: quickEmoji })}
+            title={sendBlocked ? t('errors.messageRateLimitWait', { seconds: sendCooldownSeconds }) : t('chat.sendEmoji', { emoji: quickEmoji })}
           >
             <span className="message-input-action__emoji">{quickEmoji}</span>
           </button>

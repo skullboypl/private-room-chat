@@ -107,14 +107,17 @@
   align-items: center;
   min-height: 0;
   width: 100%;
-  padding: max(1.5rem, var(--safe-top)) max(1rem, var(--safe-right)) 1.5rem max(1rem, var(--safe-left));
+  padding:
+    max(1rem, var(--safe-top))
+    max(0.75rem, var(--safe-right))
+    max(1rem, var(--safe-bottom))
+    max(0.75rem, var(--safe-left));
 }
 
 .welcome-card {
-  width: 100%;
-  max-width: 440px;
+  width: min(100%, 28rem);
   margin: 0 auto;
-  padding: 2.5rem 2rem;
+  padding: clamp(1.25rem, 4.5vw, 2.5rem) clamp(1rem, 4vw, 2rem);
   text-align: center;
   background: var(--bg-card);
   backdrop-filter: blur(20px);
@@ -131,7 +134,7 @@
 }
 
 .welcome-card__title {
-  font-size: 1.75rem;
+  font-size: clamp(1.35rem, 5vw, 1.75rem);
   font-weight: 700;
   letter-spacing: -0.02em;
   margin-bottom: 0.35rem;
@@ -142,23 +145,33 @@
 }
 
 .welcome-card__tagline {
-  font-size: 0.85rem;
+  font-size: clamp(0.8rem, 2.5vw, 0.85rem);
   color: var(--text-muted);
-  margin-bottom: 1.25rem;
+  margin-bottom: clamp(0.85rem, 3vw, 1.25rem);
 }
 
 .welcome-card__text {
   color: var(--text-secondary);
-  font-size: 0.95rem;
-  line-height: 1.7;
-  margin-bottom: 1.5rem;
+  font-size: clamp(0.88rem, 2.8vw, 0.95rem);
+  line-height: 1.65;
+  margin-bottom: clamp(1rem, 4vw, 1.5rem);
 }
 
 .welcome-card .username-form--entry {
   max-width: none;
+  width: 100%;
 }
 
 .welcome-card .username-form--entry .btn {
+  width: 100%;
+}
+
+.welcome-card .username-form__actions {
+  flex-direction: column;
+}
+
+.welcome-card .username-form__actions .btn--primary {
+  flex: none;
   width: 100%;
 }
 
@@ -250,6 +263,9 @@
 
 .app-main input[type="text"],
 .app-main input[type="password"],
+.app-main .room-pass-input,
+.room-join-form input[type="text"],
+.room-join-form .room-pass-input,
 .welcome-card input[type="text"],
 .username-form--entry input[type="text"] {
   width: 100%;
@@ -264,6 +280,9 @@
 
 .app-main input[type="text"]::placeholder,
 .app-main input[type="password"]::placeholder,
+.app-main .room-pass-input::placeholder,
+.room-join-form input[type="text"]::placeholder,
+.room-join-form .room-pass-input::placeholder,
 .welcome-card input[type="text"]::placeholder,
 .username-form--entry input[type="text"]::placeholder {
   color: var(--text-muted);
@@ -271,6 +290,9 @@
 
 .app-main input[type="text"]:focus,
 .app-main input[type="password"]:focus,
+.app-main .room-pass-input:focus,
+.room-join-form input[type="text"]:focus,
+.room-join-form .room-pass-input:focus,
 .welcome-card input[type="text"]:focus,
 .username-form--entry input[type="text"]:focus {
   outline: none;

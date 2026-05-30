@@ -7,6 +7,8 @@ import ChatShare from '@/components/ChatShare';
 import ChannelOptionsMenu from '@/components/ChannelOptionsMenu';
 import { useTranslation } from '@/context/LocaleContext';
 import { PictureInPictureIcon } from '@/components/icons/PictureInPictureIcon';
+import { RoomLockIcon } from '@/components/icons/RoomLockIcon';
+import { isRoomOpenChannel, isRoomPasswordKnown } from '@/lib/roomAccess';
 import './ChatWindow.css';
 import './ChannelOptionsMenu.css';
 
@@ -29,12 +31,87 @@ export default function ChatWindow({
   quickEmoji,
   isFullscreen = false,
   hideHeader = false,
+  roomUserCount = null,
+  activeRooms = [],
+  getSenderProfile,
+  sendCooldownSeconds = 0,
 }) {
   const { t } = useTranslation();
   const messagesEndRef = useRef(null);
   const titleBtnRef = useRef(null);
   const [channelMenuOpen, setChannelMenuOpen] = useState(false);
   const displayName = assignedUsername || currentUsername;
+  const channelIsOpen = isRoomOpenChannel(
+    isRoomPasswordKnown(roomPassword) ? { password: roomPassword } : null,
+    activeRooms,
+    roomName,
+  );
+
+  const showNickMeta = variant === 'full' && displayName && displayName !== currentUsername;
+  const usersSubtitle = roomUserCount != null
+    ? t('conversations.roomUsers', { count: String(roomUserCount) })
+    : null;
+
+  const lockIcon = (
+    <RoomLockIcon
+      open={channelIsOpen}
+      className={`chat-header__lock chat-header__lock--lead${channelIsOpen ? ' chat-header__lock--open' : ''}`}
+      title={channelIsOpen ? t('conversations.lockOpen') : t('conversations.lockClosed')}
+    />
+  );
+
+  const menuChevron = (
+    <svg
+      className="chat-header__menu-chevron chat-header__menu-chevron--trail"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+
+  const renderMenuTrigger = (className, { withStatus = false } = {}) => (
+    <button
+      type="button"
+      ref={titleBtnRef}
+      className={className}
+      title={roomName}
+      aria-label={t('channelMenu.aria', { room: roomName })}
+      aria-haspopup="dialog"
+      aria-expanded={channelMenuOpen}
+      onClick={() => setChannelMenuOpen((v) => !v)}
+    >
+      {withStatus && <span className="chat-header__status" aria-hidden="true" />}
+      {lockIcon}
+      <span className="chat-header__info-body">
+        <span className="chat-header__title-row">
+          <span className="chat-header__title-text">{roomName}</span>
+        </span>
+        {usersSubtitle && (
+          <span
+            className="chat-header__subtitle"
+            title={t('conversations.roomUsersAria', { count: String(roomUserCount) })}
+          >
+            {usersSubtitle}
+          </span>
+        )}
+        {showNickMeta && (
+          <span
+            className="chat-header__meta"
+            title={t('chat.yourNickInRoom', { nick: displayName })}
+          >
+            <span className="chat-header__nick">{t('chat.youNick', { nick: displayName })}</span>
+          </span>
+        )}
+      </span>
+      {menuChevron}
+    </button>
+  );
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -58,29 +135,7 @@ export default function ChatWindow({
     >
       {showFullHeader && (
       <header className="chat-header">
-        <div className="chat-header__info">
-          <span className="chat-header__status" aria-hidden="true" />
-          <div>
-            <button
-              type="button"
-              ref={titleBtnRef}
-              className="chat-header-title-btn chat-header__title"
-              title={roomName}
-              onClick={() => setChannelMenuOpen((v) => !v)}
-            >
-              {roomName}
-            </button>
-            <p
-              className="chat-header__meta"
-              title={displayName ? t('chat.yourNickInRoom', { nick: displayName }) : undefined}
-            >
-              {variant === 'full' && displayName && displayName !== currentUsername && (
-                <span className="chat-header__nick">{t('chat.youNick', { nick: displayName })} · </span>
-              )}
-              <span className="chat-header__e2e" title={t('chat.e2eTitle')}>🔒 {t('chat.e2e')}</span>
-            </p>
-          </div>
-        </div>
+        {renderMenuTrigger('chat-header-menu-btn', { withStatus: true })}
         <div className="chat-header__actions">
           <ChatShare roomName={roomName} roomPassword={roomPassword} />
           {isPanel && isPiPSupported && onTogglePiP && (
@@ -127,15 +182,7 @@ export default function ChatWindow({
 
       {showDockToolbar && (
         <header className="chat-dock-toolbar">
-          <button
-            type="button"
-            ref={titleBtnRef}
-            className="chat-dock-toolbar-title-btn chat-dock-toolbar__title"
-            title={roomName}
-            onClick={() => setChannelMenuOpen((v) => !v)}
-          >
-            {roomName}
-          </button>
+          {renderMenuTrigger('chat-header-menu-btn chat-dock-toolbar-menu-btn')}
           <div className="chat-dock-toolbar__actions">
             <ChatShare roomName={roomName} roomPassword={roomPassword} />
             {isPiPSupported && onTogglePiP && (
@@ -182,19 +229,29 @@ export default function ChatWindow({
         {messages.length === 0 && (
           <p className="chat-messages__empty">{t('chat.empty')}</p>
         )}
-        {messages.map((msg, index) => (
-          <Message
-            key={msg.messageId || msg.imageId || `msg-${index}-${msg.timestamp}-${msg.sender}`}
-            sender={msg.sender}
-            content={msg.content}
-            timestamp={msg.timestamp}
-            type={msg.type}
-            imageId={msg.imageId}
-            roomName={roomName}
-            isCurrentUser={msg.sender === displayName}
-            isSystem={msg.sender === 'System'}
-          />
-        ))}
+        {messages.map((msg, index) => {
+          const profile = getSenderProfile?.(msg.sender) || {};
+          return (
+            <Message
+              key={[
+                msg.messageId || msg.imageId || `msg-${index}-${msg.timestamp}`,
+                msg.sender,
+                profile.avatarSeed || '',
+                profile.avatarStyle || '',
+              ].join('-')}
+              sender={msg.sender}
+              content={msg.content}
+              timestamp={msg.timestamp}
+              type={msg.type}
+              imageId={msg.imageId}
+              roomName={roomName}
+              isCurrentUser={msg.sender === displayName}
+              isSystem={msg.sender === 'System'}
+              avatarSeed={profile.avatarSeed}
+              avatarStyle={profile.avatarStyle}
+            />
+          );
+        })}
         <div ref={messagesEndRef} />
       </div>
 
@@ -204,6 +261,7 @@ export default function ChatWindow({
         onSendMessage={onSendMessage}
         onSendImage={onSendImage}
         compact={useCompactInput}
+        sendCooldownSeconds={sendCooldownSeconds}
       />
 
       <ChannelOptionsMenu

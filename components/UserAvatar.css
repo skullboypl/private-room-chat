@@ -1,0 +1,7 @@
+.user-avatar {
+  border-radius: var(--radius-full);
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--bg-elevated);
+  display: block;
+}

@@ -1,6 +1,7 @@
 import { Inter } from 'next/font/google';
 import { SITE_NAME, SITE_TAGLINE, SITE_URL, SITE_HOST } from '@/lib/seo/site';
 import './globals.css';
+import './pwa-safe-area.css';
 
 const inter = Inter({
   subsets: ['latin', 'latin-ext'],
@@ -27,7 +28,7 @@ export const metadata = {
   manifest: '/manifest.webmanifest',
   appleWebApp: {
     capable: true,
-    statusBarStyle: 'black-translucent',
+    statusBarStyle: 'black',
     title: SITE_NAME,
   },
   openGraph: {

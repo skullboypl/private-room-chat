@@ -226,17 +226,24 @@
 }
 
 .seo-footer__legal {
-  display: grid;
-  gap: 0.45rem;
-  max-width: 52ch;
   margin: 0 auto;
-}
-
-.seo-footer__legal p {
-  margin: 0;
+  max-width: 52ch;
   font-size: 0.75rem;
   line-height: 1.55;
   color: var(--text-muted);
+  text-align: center;
+}
+
+.seo-footer__legal-link {
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.seo-footer__legal-link:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
 }
 
 .wiki-article__header {

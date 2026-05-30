@@ -75,6 +75,7 @@
 }
 
 .modal-form {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
@@ -88,7 +89,8 @@
 }
 
 .modal-form input[type="text"],
-.modal-form input[type="password"] {
+.modal-form input[type="password"],
+.modal-form .room-pass-input {
   width: 100%;
   padding: 0.75rem 1rem;
   background: var(--bg-input);
@@ -99,6 +101,7 @@
   transition: border-color var(--transition), box-shadow var(--transition);
 }
 
+.modal-form .room-pass-input:focus,
 .modal-form input:focus {
   outline: none;
   border-color: var(--border-focus);
@@ -126,6 +129,33 @@
   background: rgba(245, 158, 11, 0.1);
   border: 1px solid rgba(245, 158, 11, 0.28);
   color: #fcd34d;
+}
+
+.modal-form__notice--open {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  color: #6ee7b7;
+}
+
+.modal-form__check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.modal-form__check input {
+  margin-top: 0.15rem;
+  accent-color: var(--accent);
+}
+
+.modal-form__hint {
+  margin: -0.25rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-muted);
 }
 
 .modal-form__error {

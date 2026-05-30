@@ -1,0 +1,81 @@
+/* Aktywowane przez ChatApp przy fullscreen czatu na telefonie (class na html/body). */
+
+@media (max-width: 720px) {
+  html.html--mobile-chat {
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  html.html--mobile-chat body.body--mobile-chat {
+    position: fixed;
+    top: var(--safe-top);
+    right: var(--safe-right);
+    bottom: var(--safe-bottom);
+    left: var(--safe-left);
+    width: auto;
+    height: auto;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  html.html--mobile-chat .app--messenger-full {
+    height: 100%;
+    max-height: none;
+    overflow: hidden;
+    max-width: 100vw;
+  }
+
+  html.html--mobile-chat .fb-layout--fullscreen {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    overflow: hidden;
+  }
+
+  html.html--mobile-chat .fb-layout--fullscreen-tabs .fb-room-bar {
+    max-width: 100vw;
+  }
+
+  html.html--mobile-chat .fb-fullscreen-stage {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    max-width: 100vw;
+    overflow: hidden;
+  }
+
+  html.html--mobile-chat .fb-fullscreen-stage .chat-window {
+    width: 100%;
+    max-width: 100vw;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  html.html--mobile-chat .fb-layout--fullscreen > .fb-room-bar {
+    padding-top: max(0.5rem, var(--safe-top));
+  }
+
+  html.pwa-standalone.html--mobile-chat .fb-layout--fullscreen > .fb-room-bar {
+    padding-top: 0.5rem;
+  }
+
+  html.html--mobile-chat .fb-layout--fullscreen-tabs .chat-window--panel.chat-window--fullscreen .chat-header {
+    padding-top: 0.5rem;
+  }
+
+  html.html--mobile-chat .chat-window--panel.chat-window--fullscreen .chat-header,
+  html.html--mobile-chat .chat-window--panel .chat-header {
+    max-width: 100vw;
+  }
+
+  html.html--mobile-chat .message-input-form,
+  html.html--mobile-chat .message-input-row {
+    max-width: 100vw;
+  }
+}

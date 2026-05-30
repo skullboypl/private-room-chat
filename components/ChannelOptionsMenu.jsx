@@ -2,11 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { getLocalImagesForRoom, getLocalImage } from '@/lib/localMessageStore';
+import {
+  getLocalImagesForRoom,
+  getLocalImage,
+  LOCAL_MEDIA_STORAGE_KEY,
+} from '@/lib/localMessageStore';
 import { getRoomPassword } from '@/lib/roomSession';
+import { isOpenRoomPassword } from '@/lib/roomAccess';
 import { applyRoomQuickEmoji, getRoomQuickEmoji, DEFAULT_QUICK_EMOJI } from '@/lib/roomEmoji';
 import { socketService } from '@/lib/socket/client';
 import { useTranslation } from '@/context/LocaleContext';
+import { formatAppTime } from '@/lib/i18n/locale';
+import { normalizeRoomUsersList } from '@/lib/roomUsersList';
+import UserAvatar from '@/components/UserAvatar';
 import './ChannelOptionsMenu.css';
 
 const QUICK_EMOJI_PRESETS = ['👍', '❤️', '😂', '🔥', '👏', '🎉', '😮', '😢'];
@@ -17,7 +25,7 @@ export default function ChannelOptionsMenu({
   onClose,
   anchorRef,
 }) {
-  const { t } = useTranslation();
+  const { t, lang } = useTranslation();
   const menuRef = useRef(null);
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const [users, setUsers] = useState([]);
@@ -50,29 +58,42 @@ export default function ChannelOptionsMenu({
 
   useEffect(() => {
     if (!open) return;
+
+    const refreshMedia = () => setMedia(getLocalImagesForRoom(roomName));
+
     updatePosition();
     setQuickEmoji(getRoomQuickEmoji(roomName));
-    setMedia(getLocalImagesForRoom(roomName));
+    refreshMedia();
     setActiveTab('info');
     setCopied(false);
 
     setUsersLoading(true);
     const onUsers = ({ roomName: rn, users: list }) => {
       if (rn !== roomName) return;
-      setUsers(Array.isArray(list) ? list : []);
+      setUsers(normalizeRoomUsersList(list));
       setUsersLoading(false);
     };
     socketService.on('roomUsersList', onUsers);
     socketService.emit('getRoomUsers', roomName);
 
     const onResize = () => updatePosition();
+    const onStorage = (e) => {
+      if (!e.key || e.key === LOCAL_MEDIA_STORAGE_KEY) refreshMedia();
+    };
+
     window.addEventListener('resize', onResize);
     window.addEventListener('scroll', onResize, true);
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('chatvxh:media-store-changed', refreshMedia);
+    window.addEventListener('chatvxh:storage-cleared', refreshMedia);
 
     return () => {
       socketService.off('roomUsersList', onUsers);
       window.removeEventListener('resize', onResize);
       window.removeEventListener('scroll', onResize, true);
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('chatvxh:media-store-changed', refreshMedia);
+      window.removeEventListener('chatvxh:storage-cleared', refreshMedia);
     };
   }, [open, roomName, updatePosition]);
 
@@ -174,14 +195,18 @@ export default function ChannelOptionsMenu({
       <div className="channel-options-body">
         {activeTab === 'info' && (
           <div className="channel-options-section">
-            <span className="channel-options-label">{t('channelMenu.password')}</span>
-            {password ? (
-              <div className="channel-options-password-row">
-                <code>{password}</code>
-                <button type="button" onClick={copyPassword}>
-                  {copied ? t('channelMenu.copied') : t('channelMenu.copyPassword')}
-                </button>
-              </div>
+            {isOpenRoomPassword(password) ? (
+              <p className="channel-options-open">{t('channelMenu.openChannel')}</p>
+            ) : password ? (
+              <>
+                <span className="channel-options-label">{t('channelMenu.password')}</span>
+                <div className="channel-options-password-row">
+                  <code>{password}</code>
+                  <button type="button" onClick={copyPassword}>
+                    {copied ? t('channelMenu.copied') : t('channelMenu.copyPassword')}
+                  </button>
+                </div>
+              </>
             ) : (
               <p className="channel-options-muted">{t('channelMenu.noPassword')}</p>
             )}
@@ -223,9 +248,28 @@ export default function ChannelOptionsMenu({
               <p className="channel-options-muted">{t('channelMenu.noOnline')}</p>
             ) : (
               <ul className="channel-options-users">
-                {users.map((name) => (
-                  <li key={name}>{name}</li>
-                ))}
+                {users.map((user) => {
+                  const joinLabel = user.joinedAt != null
+                    ? t('channelMenu.joinedAt', {
+                      time: formatAppTime(new Date(user.joinedAt), lang),
+                    })
+                    : t('channelMenu.joinedAtUnknown');
+                  return (
+                    <li key={user.username} className="channel-options-user">
+                      <UserAvatar
+                        seed={user.avatarSeed || user.username}
+                        style={user.avatarStyle}
+                        className="channel-options-user__avatar"
+                        size={36}
+                        alt={user.username}
+                      />
+                      <span className="channel-options-user__main">
+                        <span className="channel-options-user__name">{user.username}</span>
+                        <span className="channel-options-user__time">{joinLabel}</span>
+                      </span>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>

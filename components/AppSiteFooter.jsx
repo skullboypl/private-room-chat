@@ -62,11 +62,15 @@ export default function AppSiteFooter({ variant = 'inline' }) {
           ))}
         </p>
 
-        <div className="app-site-footer__legal">
-          {appStrings.footer.disclaimer.map((paragraph) => (
-            <p key={paragraph}>{paragraph}</p>
-          ))}
-        </div>
+        <p className="app-site-footer__legal">
+          {appStrings.footer.disclaimerShort}{' '}
+          <Link
+            href={wikiPath(lang || DEFAULT_LOCALE, appStrings.footer.disclaimerMoreSlug)}
+            className="app-site-footer__legal-link"
+          >
+            {appStrings.footer.disclaimerMore}
+          </Link>
+        </p>
 
         <p className="app-site-footer__copy">© {year} {SITE_HOST}</p>
       </div>

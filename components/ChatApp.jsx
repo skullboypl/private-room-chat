@@ -1,8 +1,14 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { socketService } from '@/lib/socket/client';
-import { setRoomKey, hasRoomKey, clearRoomKey, encryptMessage, decryptMessage } from '@/lib/crypto/e2e';
+import {
+  ensureRoomKey,
+  hasRoomKey,
+  clearRoomKey,
+  encryptMessage,
+  decryptMessage,
+} from '@/lib/crypto/e2e';
 import {
   saveLocalImage,
   getLocalImagesForRoom,
@@ -32,6 +38,13 @@ import PiPRoot from '@/components/PiPRoot';
 import { useDocumentPiP } from '@/hooks/useDocumentPiP';
 import { isDocumentPiPSupported, requestDocumentPiPWindow } from '@/lib/documentPiP';
 import { isCompactViewport, COMPACT_VIEWPORT_MAX } from '@/lib/viewport';
+import {
+  isMobileChatViewport,
+  lockMobileChatViewport,
+  resetMobileViewportForChat,
+  setMobileChatViewportActive,
+} from '@/lib/mobileViewport';
+import '@/components/mobile-chat-viewport.css';
 import { trimExpandedToViewport } from '@/lib/dockLayout';
 import { applyRoomQuickEmoji, DEFAULT_QUICK_EMOJI } from '@/lib/roomEmoji';
 import AppSiteFooter from '@/components/AppSiteFooter';
@@ -39,6 +52,32 @@ import AppLangSwitcher from '@/components/AppLangSwitcher';
 import { useTranslation } from '@/context/LocaleContext';
 import { translateRoomError } from '@/lib/i18n/systemMessages';
 import { formatAppTime } from '@/lib/i18n/locale';
+import { createPresenceSystemMessage } from '@/lib/chatPresence';
+import {
+  findActiveRoomMeta,
+  getRoomUserCount,
+  isOpenRoomPassword,
+  isRoomPasswordKnown,
+  normalizeActiveRoomsList,
+  resolveRoomUserCount,
+} from '@/lib/roomAccess';
+import {
+  buildUserProfilesFromServerUsers,
+  mergeUserProfiles,
+} from '@/lib/roomUserProfiles';
+import {
+  createMessageSendLimiter,
+  MESSAGE_SEND_WINDOW_MS,
+} from '@/lib/messageSendRateLimit';
+import {
+  getJoinAvatarPayload,
+  readStoredUserAvatarSeed,
+  readStoredUserAvatarStyle,
+  writeStoredUserAvatar,
+  ensureStoredUserAvatar,
+} from '@/lib/userAvatarStorage';
+import { resolveSenderProfile } from '@/lib/resolveSenderProfile';
+import { invalidateUserAvatarCache } from '@/lib/userAvatar';
 import '@/components/chat-app.css';
 
 function emptyRoomState(password = '', assignedUsername = '') {
@@ -50,6 +89,8 @@ function emptyRoomState(password = '', assignedUsername = '') {
     unread: 0,
     lastPreview: '',
     lastTimestamp: '',
+    userCount: null,
+    userProfiles: {},
   };
 }
 
@@ -58,12 +99,15 @@ function parseSocketText(payload) {
   return payload?.message || '';
 }
 
-async function normalizeMessage(msg, roomName) {
+async function normalizeMessage(msg, roomName, fallbackPassword) {
   if (msg.sender === 'System') return msg;
 
-  if (!hasRoomKey(roomName)) {
-    const password = getRoomPassword(roomName);
-    if (password) await setRoomKey(roomName, password);
+  const sessionPassword = getRoomPassword(roomName);
+  const password = isRoomPasswordKnown(sessionPassword)
+    ? sessionPassword
+    : fallbackPassword;
+  if (isRoomPasswordKnown(password)) {
+    await ensureRoomKey(roomName, password);
   }
 
   let content = msg.content;
@@ -95,8 +139,8 @@ async function normalizeMessage(msg, roomName) {
   return { ...msg, type: 'text', content: parsed.text };
 }
 
-async function normalizeMessages(messages, roomName) {
-  return Promise.all(messages.map((msg) => normalizeMessage(msg, roomName)));
+async function normalizeMessages(messages, roomName, roomPassword) {
+  return Promise.all(messages.map((msg) => normalizeMessage(msg, roomName, roomPassword)));
 }
 
 function mergeWithLocalImages(textMessages, roomName) {
@@ -148,7 +192,7 @@ function hydrateOpenRoomsFromSession(list) {
   if (!Array.isArray(list) || list.length === 0) return {};
 
   return list.reduce((acc, entry) => {
-    if (!entry?.roomName || !entry?.password) return acc;
+    if (!entry?.roomName || entry.password == null || entry.password === undefined) return acc;
 
     setRoomSession(entry.roomName, entry.password);
     acc[entry.roomName] = {
@@ -183,7 +227,13 @@ export default function ChatApp() {
   const [joiningRoom, setJoiningRoom] = useState(false);
   const [joinModal, setJoinModal] = useState({ open: false, roomName: '', password: '' });
   const joinModalRef = useRef(joinModal);
+  const messageSendLimiterRef = useRef(null);
+  if (!messageSendLimiterRef.current) {
+    messageSendLimiterRef.current = createMessageSendLimiter();
+  }
+  const [messageSendCooldownMs, setMessageSendCooldownMs] = useState(0);
   const [fullscreenRoom, setFullscreenRoom] = useState(null);
+  const [mobileChatsCollapsed, setMobileChatsCollapsed] = useState(false);
   const [isCompact, setIsCompact] = useState(false);
   const {
     pipRooms,
@@ -196,6 +246,7 @@ export default function ChatApp() {
   } = useDocumentPiP();
 
   const openRoomsRef = useRef({});
+  const activeRoomsRef = useRef([]);
   const activeRoomRef = useRef(null);
   const pendingInviteRef = useRef(null);
   const usernameRef = useRef('');
@@ -242,6 +293,7 @@ export default function ChatApp() {
       return [...prev, roomName];
     });
     if (isCompact) {
+      setMobileChatsCollapsed(false);
       setFullscreenRoom(roomName);
     }
     clearRoomUnread(roomName);
@@ -251,6 +303,7 @@ export default function ChatApp() {
   useEffect(() => { pendingInviteRef.current = pendingInvite; }, [pendingInvite]);
   useEffect(() => { usernameRef.current = username; }, [username]);
   useEffect(() => { openRoomsRef.current = openRooms; }, [openRooms]);
+  useEffect(() => { activeRoomsRef.current = activeRooms; }, [activeRooms]);
   useEffect(() => { joinModalRef.current = joinModal; }, [joinModal]);
 
   useEffect(() => {
@@ -284,7 +337,41 @@ export default function ChatApp() {
   }, [isCompact, focusedRoom, fullscreenRoom, pipRooms]);
 
   useEffect(() => {
+    if (!isCompact) {
+      setMobileChatViewportActive(false);
+      return undefined;
+    }
+
+    const inFullscreenChat = Boolean(fullscreenRoom);
+    setMobileChatViewportActive(inFullscreenChat);
+
+    if (!inFullscreenChat) return undefined;
+
+    const unlock = lockMobileChatViewport();
+
+    const onOrientation = () => {
+      if (isMobileChatViewport() && fullscreenRoom) {
+        resetMobileViewportForChat();
+      }
+    };
+
+    window.addEventListener('orientationchange', onOrientation);
+
+    return () => {
+      window.removeEventListener('orientationchange', onOrientation);
+      unlock.restore();
+    };
+  }, [isCompact, fullscreenRoom]);
+
+  useEffect(() => {
+    if (!isCompact) {
+      setMobileChatsCollapsed(false);
+    }
+  }, [isCompact]);
+
+  useEffect(() => {
     if (!ready || !username || !isCompact) return;
+    if (mobileChatsCollapsed) return;
 
     const active = (focusedRoom && openRooms[focusedRoom])
       ? focusedRoom
@@ -301,7 +388,7 @@ export default function ChatApp() {
       setExpandedRooms([active]);
     }
     setFullscreenRoom((prev) => (prev === active ? prev : active));
-  }, [ready, username, isCompact, focusedRoom, expandedRooms, openRooms]);
+  }, [ready, username, isCompact, mobileChatsCollapsed, focusedRoom, expandedRooms, openRooms]);
 
   useEffect(() => {
     document.title = focusedRoom
@@ -356,6 +443,19 @@ export default function ChatApp() {
     return () => window.removeEventListener('hashchange', applyInviteFromUrl);
   }, [applyInviteFromUrl]);
 
+  useEffect(() => {
+    if (messageSendCooldownMs <= 0) return undefined;
+
+    const tick = () => {
+      const retryAfterMs = messageSendLimiterRef.current.getRetryAfterMs();
+      setMessageSendCooldownMs(retryAfterMs);
+    };
+
+    tick();
+    const id = window.setInterval(tick, 250);
+    return () => window.clearInterval(id);
+  }, [messageSendCooldownMs]);
+
   const appendSystemMessage = useCallback((roomName, text) => {
     if (!roomName || !text) return;
     const systemMessage = {
@@ -381,7 +481,23 @@ export default function ChatApp() {
     });
   }, [syncOpenRooms]);
 
-  const joinRoom = useCallback(async (roomName, password, { restore = false } = {}) => {
+  const consumeMessageSendSlot = useCallback((roomName) => {
+    const result = messageSendLimiterRef.current.tryConsume();
+    if (!result.ok) {
+      setMessageSendCooldownMs(result.retryAfterMs);
+      const seconds = Math.max(1, Math.ceil(result.retryAfterMs / 1000));
+      appendSystemMessage(roomName, tRef.current('errors.messageRateLimit', { seconds }));
+      return false;
+    }
+    setMessageSendCooldownMs(0);
+    return true;
+  }, [appendSystemMessage]);
+
+  const messageSendCooldownSeconds = messageSendCooldownMs > 0
+    ? Math.max(1, Math.ceil(messageSendCooldownMs / 1000))
+    : 0;
+
+  const joinRoom = useCallback(async (roomName, password, { restore = false, noPassword = false } = {}) => {
     const nick = getJoinUsername() || usernameRef.current;
     if (!nick) {
       setRoomError(tRef.current('errors.usernameRequired'));
@@ -390,10 +506,19 @@ export default function ChatApp() {
     if (joiningRoomsRef.current.has(roomName)) return false;
 
     const existing = openRoomsRef.current[roomName];
-    const resolvedPassword = password || existing?.password;
-    if (!resolvedPassword) {
-      setRoomError(tRef.current('errors.noPassword'));
-      return false;
+    const meta = findActiveRoomMeta(activeRoomsRef.current, roomName);
+    const joiningOpen = noPassword || isOpenRoomPassword(password) || meta?.isOpen;
+
+    let resolvedPassword = password;
+    if (resolvedPassword === undefined || resolvedPassword === null) {
+      resolvedPassword = existing?.password;
+    }
+    if (resolvedPassword === undefined || resolvedPassword === null) {
+      if (joiningOpen) resolvedPassword = '';
+      else {
+        setRoomError(tRef.current('errors.noPassword'));
+        return false;
+      }
     }
 
     joiningRoomsRef.current.add(roomName);
@@ -401,9 +526,7 @@ export default function ChatApp() {
     setRoomError('');
 
     try {
-      if (!hasRoomKey(roomName)) {
-        await setRoomKey(roomName, resolvedPassword);
-      }
+      await ensureRoomKey(roomName, resolvedPassword);
       syncOpenRooms((prev) => ({
         ...prev,
         [roomName]: {
@@ -420,6 +543,8 @@ export default function ChatApp() {
         password: resolvedPassword,
         username: nick,
         restore,
+        noPassword: isOpenRoomPassword(resolvedPassword),
+        ...getJoinAvatarPayload(),
       });
       return true;
     } catch {
@@ -432,13 +557,15 @@ export default function ChatApp() {
   }, [syncOpenRooms, updateJoiningState]);
 
   const joinInviteRoom = useCallback(async (invite) => {
-    if (!invite?.roomName || !invite?.password) return false;
+    if (!invite?.roomName) return false;
 
-    const token = `${invite.roomName}\0${invite.password}`;
+    const token = `${invite.roomName}\0${invite.password ?? ''}`;
     if (processedInviteRef.current === token) return false;
 
     processedInviteRef.current = token;
-    const ok = await joinRoom(invite.roomName, invite.password);
+    const ok = await joinRoom(invite.roomName, invite.password, {
+      noPassword: isOpenRoomPassword(invite.password ?? ''),
+    });
     if (!ok) processedInviteRef.current = null;
     return ok;
   }, [joinRoom]);
@@ -451,7 +578,7 @@ export default function ChatApp() {
     const entries = [];
 
     for (const [roomName, room] of Object.entries(openRoomsRef.current)) {
-      if (!room?.password || seen.has(roomName)) continue;
+      if (room?.password == null || room?.password === undefined || seen.has(roomName)) continue;
       seen.add(roomName);
       entries.push({
         roomName,
@@ -465,7 +592,7 @@ export default function ChatApp() {
 
     const { list } = loadPersistedSession();
     for (const entry of list) {
-      if (!entry?.roomName || !entry?.password || seen.has(entry.roomName)) continue;
+      if (!entry?.roomName || entry.password == null || entry.password === undefined || seen.has(entry.roomName)) continue;
       seen.add(entry.roomName);
       entries.push(entry);
     }
@@ -481,9 +608,7 @@ export default function ChatApp() {
       if (joiningRoomsRef.current.has(entry.roomName)) continue;
 
       try {
-        if (!hasRoomKey(entry.roomName)) {
-          await setRoomKey(entry.roomName, entry.password);
-        }
+        await ensureRoomKey(entry.roomName, entry.password);
         setRoomSession(entry.roomName, entry.password);
         syncOpenRooms((prev) => ({
           ...prev,
@@ -503,6 +628,7 @@ export default function ChatApp() {
           roomName: entry.roomName,
           password: entry.password,
           assignedUsername: entry.assignedUsername || nick,
+          noPassword: isOpenRoomPassword(entry.password),
         });
       } catch {
         clearRoomKey(entry.roomName);
@@ -511,6 +637,7 @@ export default function ChatApp() {
     }
 
     if (prepared.length === 0) {
+      joiningRoomsRef.current.clear();
       updateJoiningState();
       return;
     }
@@ -532,7 +659,14 @@ export default function ChatApp() {
 
     socketService.connect();
 
-    const onRoomJoined = async ({ roomName, messages: initialMessages, username: assignedUsername, quickEmoji }) => {
+    const onRoomJoined = async ({
+      roomName,
+      messages: initialMessages,
+      username: assignedUsername,
+      quickEmoji,
+      users,
+      showPresence,
+    }) => {
       const invite = pendingInviteRef.current;
       if (invite?.roomName === roomName) {
         clearPendingInvite();
@@ -541,33 +675,59 @@ export default function ChatApp() {
       joiningRoomsRef.current.delete(roomName);
       updateJoiningState();
 
-      const password = getRoomPassword(roomName) || openRoomsRef.current[roomName]?.password || '';
-      if (password && !hasRoomKey(roomName)) {
-        await setRoomKey(roomName, password);
-      }
-      if (password) {
-        setRoomSession(roomName, password);
-      }
+      const sessionPwd = getRoomPassword(roomName);
+      const password = isRoomPasswordKnown(sessionPwd)
+        ? sessionPwd
+        : (openRoomsRef.current[roomName]?.password ?? '');
+
+      await ensureRoomKey(roomName, password);
+      setRoomSession(roomName, password);
 
       const prevRoom = openRoomsRef.current[roomName];
       const serverMessages = initialMessages?.length
-        ? await normalizeMessages(initialMessages, roomName)
+        ? await normalizeMessages(initialMessages, roomName, password)
         : [];
       const baseMessages = serverMessages.length > 0
         ? serverMessages
         : (prevRoom?.messages || []);
-      const merged = dedupeMessages(mergeWithLocalImages(baseMessages, roomName));
+      let merged = dedupeMessages(mergeWithLocalImages(baseMessages, roomName));
+
+      if (showPresence && Array.isArray(users)) {
+        const nick = assignedUsername || usernameRef.current;
+        const presenceMsg = createPresenceSystemMessage(
+          roomName,
+          users,
+          nick,
+          tRef.current,
+          (date) => formatAppTime(date, langRef.current),
+        );
+        merged = dedupeMessages([presenceMsg, ...merged]);
+      }
+
       const meta = buildRoomMeta(merged, prevRoom, tRef.current);
+
+      const liveCount = Array.isArray(users) ? users.length : null;
+      const roomNick = assignedUsername || prevRoom?.assignedUsername || usernameRef.current;
+      const localAvatar = getJoinAvatarPayload();
 
       syncOpenRooms((prev) => ({
         ...prev,
         [roomName]: {
           ...(prev[roomName] || emptyRoomState(password, assignedUsername)),
           password,
-          assignedUsername: assignedUsername || prev[roomName]?.assignedUsername || usernameRef.current,
+          assignedUsername: roomNick,
           quickEmoji: quickEmoji || prev[roomName]?.quickEmoji || DEFAULT_QUICK_EMOJI,
           messages: merged,
           unread: 0,
+          userCount: liveCount ?? getRoomUserCount(activeRoomsRef.current, roomName) ?? prev[roomName]?.userCount ?? null,
+          userProfiles: mergeUserProfiles(
+            buildUserProfilesFromServerUsers(users),
+            roomNick ? [{
+              username: roomNick,
+              avatarSeed: localAvatar.avatarSeed,
+              avatarStyle: localAvatar.avatarStyle,
+            }] : [],
+          ),
           ...meta,
         },
       }));
@@ -583,6 +743,31 @@ export default function ChatApp() {
 
       setRoomError('');
       setJoinModal({ open: false, roomName: '', password: '' });
+      socketService.emit('getRoomUsers', roomName);
+    };
+
+    const onRoomUsersList = ({ roomName, users }) => {
+      if (!roomName || !Array.isArray(users)) return;
+      syncOpenRooms((prev) => {
+        const room = prev[roomName];
+        if (!room) return prev;
+        const roomNick = room.assignedUsername;
+        const localAvatar = roomNick ? getJoinAvatarPayload() : null;
+        return {
+          ...prev,
+          [roomName]: {
+            ...room,
+            userProfiles: mergeUserProfiles(
+              buildUserProfilesFromServerUsers(users),
+              roomNick ? [{
+                username: roomNick,
+                avatarSeed: localAvatar.avatarSeed,
+                avatarStyle: localAvatar.avatarStyle,
+              }] : [],
+            ),
+          },
+        };
+      });
     };
 
     const onReceiveMessage = async (message) => {
@@ -590,11 +775,11 @@ export default function ChatApp() {
       const room = openRoomsRef.current[roomName];
       if (!roomName || !room) return;
 
-      if (!hasRoomKey(roomName) && room.password) {
-        await setRoomKey(roomName, room.password);
+      if (isRoomPasswordKnown(room.password)) {
+        await ensureRoomKey(roomName, room.password);
       }
 
-      const normalized = await normalizeMessage(message, roomName);
+      const normalized = await normalizeMessage(message, roomName, room.password);
       const isFocused = activeRoomRef.current === roomName;
 
       syncOpenRooms((prev) => {
@@ -637,12 +822,18 @@ export default function ChatApp() {
           type: 'text',
         };
         const messages = appendUniqueMessage(room.messages, systemMessage);
+        const userProfiles = { ...(room.userProfiles || {}) };
+        if (userProfiles[oldUsername]) {
+          userProfiles[newUsername] = userProfiles[oldUsername];
+          delete userProfiles[oldUsername];
+        }
         return {
           ...prev,
           [roomName]: {
             ...room,
             assignedUsername: room.assignedUsername === oldUsername ? newUsername : room.assignedUsername,
             messages,
+            userProfiles,
             ...buildRoomMeta(messages, {}, tRef.current),
           },
         };
@@ -652,16 +843,75 @@ export default function ChatApp() {
 
     const onUserJoined = (payload) => {
       appendSystemMessage(payload?.roomName, parseSocketText(payload));
+      const roomName = payload?.roomName;
+      const uname = payload?.username;
+      if (!roomName || !uname) return;
+
+      syncOpenRooms((prev) => {
+        const room = prev[roomName];
+        if (!room) return prev;
+        return {
+          ...prev,
+          [roomName]: {
+            ...room,
+            userProfiles: mergeUserProfiles(room.userProfiles, [{
+              username: uname,
+              avatarSeed: payload.avatarSeed,
+              avatarStyle: payload.avatarStyle,
+            }]),
+          },
+        };
+      });
     };
 
     const onUserLeft = (payload) => {
       appendSystemMessage(payload?.roomName, parseSocketText(payload));
     };
 
+    const onRoomUserAvatarUpdated = ({ roomName, username: uname, avatarSeed, avatarStyle }) => {
+      if (!roomName || !uname) return;
+      syncOpenRooms((prev) => {
+        const room = prev[roomName];
+        if (!room) return prev;
+        if (uname === room.assignedUsername) {
+          writeStoredUserAvatar(avatarSeed, avatarStyle);
+          invalidateUserAvatarCache();
+        }
+        return {
+          ...prev,
+          [roomName]: {
+            ...room,
+            userProfiles: mergeUserProfiles(room.userProfiles, [{
+              username: uname,
+              avatarSeed,
+              avatarStyle,
+            }]),
+          },
+        };
+      });
+    };
+
     const onRoomError = (payload) => {
       const roomName = payload?.roomName;
       const errMsg = payload?.message || String(payload);
       const invite = pendingInviteRef.current;
+
+      if (/zbyt wiele wiadomości/i.test(errMsg)) {
+        let retryAfterMs = messageSendLimiterRef.current.getRetryAfterMs();
+        if (retryAfterMs <= 0) {
+          let attempt = messageSendLimiterRef.current.tryConsume();
+          while (attempt.ok) {
+            attempt = messageSendLimiterRef.current.tryConsume();
+          }
+          retryAfterMs = attempt.retryAfterMs || MESSAGE_SEND_WINDOW_MS;
+        }
+        setMessageSendCooldownMs(retryAfterMs);
+        if (roomName && openRoomsRef.current[roomName]) {
+          const seconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
+          appendSystemMessage(roomName, tRef.current('errors.messageRateLimit', { seconds }));
+        }
+        return;
+      }
 
       if (roomName) joiningRoomsRef.current.delete(roomName);
 
@@ -673,8 +923,10 @@ export default function ChatApp() {
         updateJoiningState();
         socketService.emit('joinRoom', {
           roomName: invite.roomName,
-          password: invite.password,
+          password: invite.password ?? '',
           username: fallbackNick,
+          noPassword: isOpenRoomPassword(invite.password ?? ''),
+          ...getJoinAvatarPayload(),
         });
         return;
       }
@@ -732,7 +984,20 @@ export default function ChatApp() {
       }
     };
 
-    const onActiveRoomsList = (rooms) => setActiveRooms(rooms);
+    const onActiveRoomsList = (rooms) => {
+      const normalized = normalizeActiveRoomsList(rooms);
+      setActiveRooms(normalized);
+      syncOpenRooms((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const meta of normalized) {
+          if (!next[meta.roomName] || next[meta.roomName].userCount === meta.userCount) continue;
+          next[meta.roomName] = { ...next[meta.roomName], userCount: meta.userCount };
+          changed = true;
+        }
+        return changed ? next : prev;
+      });
+    };
 
     const onConnect = async () => {
       socketService.emit('getRooms');
@@ -749,6 +1014,8 @@ export default function ChatApp() {
     socketService.on('roomQuickEmojiUpdated', onRoomQuickEmojiUpdated);
     socketService.on('roomNickChanged', onRoomNickChanged);
     socketService.on('userJoined', onUserJoined);
+    socketService.on('roomUserAvatarUpdated', onRoomUserAvatarUpdated);
+    socketService.on('roomUsersList', onRoomUsersList);
     socketService.on('userLeft', onUserLeft);
     socketService.on('roomError', onRoomError);
     socketService.on('activeRoomsList', onActiveRoomsList);
@@ -766,6 +1033,8 @@ export default function ChatApp() {
       socketService.off('roomQuickEmojiUpdated', onRoomQuickEmojiUpdated);
       socketService.off('roomNickChanged', onRoomNickChanged);
       socketService.off('userJoined', onUserJoined);
+      socketService.off('roomUserAvatarUpdated', onRoomUserAvatarUpdated);
+      socketService.off('roomUsersList', onRoomUsersList);
       socketService.off('userLeft', onUserLeft);
       socketService.off('roomError', onRoomError);
       socketService.off('activeRoomsList', onActiveRoomsList);
@@ -776,9 +1045,93 @@ export default function ChatApp() {
     };
   }, [ready, socketActive, rejoinOpenRooms, appendSystemMessage, syncOpenRooms, maximizeRoom, updateJoiningState, clearPendingInvite]);
 
+  const handleClearUser = useCallback(() => {
+    usernameRef.current = '';
+    setUsername('');
+    setSocketActive(false);
+    setExpandedRooms([]);
+    setFocusedRoom(null);
+    setFullscreenRoom(null);
+    syncOpenRooms(() => ({}));
+  }, [syncOpenRooms]);
+
+  const handleClearProfileRequest = useCallback(() => {
+    const roomNames = Object.keys(openRoomsRef.current);
+    if (roomNames.length > 0) {
+      const ok = window.confirm(tRef.current('welcome.clearSessionConfirm'));
+      if (!ok) return false;
+      for (const roomName of roomNames) {
+        socketService.emit('leaveRoom', { roomName });
+        clearRoomKey(roomName);
+        clearRoomSession(roomName);
+        clearLocalImagesForRoom(roomName);
+        joiningRoomsRef.current.delete(roomName);
+      }
+      updateJoiningState();
+      syncOpenRooms(() => ({}));
+      setExpandedRooms([]);
+      setFocusedRoom(null);
+      setFullscreenRoom(null);
+      activeRoomRef.current = null;
+      persistOpenRooms({}, null);
+      if (pipRooms.length > 0) closePiP();
+      socketService.emit('getRooms');
+    }
+    return true;
+  }, [syncOpenRooms, updateJoiningState, pipRooms, closePiP]);
+
+  const syncedProfileAvatar = useMemo(() => {
+    for (const room of Object.values(openRooms)) {
+      const nick = room.assignedUsername;
+      if (!nick) continue;
+      const profile = room.userProfiles?.[nick];
+      if (profile?.avatarSeed) {
+        return { avatarSeed: profile.avatarSeed, avatarStyle: profile.avatarStyle };
+      }
+    }
+    return getJoinAvatarPayload();
+  }, [openRooms]);
+
+  const handleAvatarChange = useCallback(({ avatarSeed, avatarStyle }) => {
+    const seed = avatarSeed || readStoredUserAvatarSeed();
+    const style = avatarStyle || readStoredUserAvatarStyle();
+    writeStoredUserAvatar(seed, style);
+    invalidateUserAvatarCache();
+
+    syncOpenRooms((prev) => {
+      const next = { ...prev };
+      let changed = false;
+
+      for (const [roomName, room] of Object.entries(next)) {
+        const nick = room.assignedUsername;
+        if (!nick) continue;
+
+        next[roomName] = {
+          ...room,
+          userProfiles: mergeUserProfiles(room.userProfiles, [{
+            username: nick,
+            avatarSeed: seed,
+            avatarStyle: style,
+          }]),
+        };
+        changed = true;
+
+        socketService.emit('updateUserAvatar', {
+          roomName,
+          avatarSeed: seed,
+          avatarStyle: style,
+        });
+      }
+
+      return changed ? next : prev;
+    });
+  }, [syncOpenRooms]);
+
   const handleSetUsername = useCallback((name) => {
     const trimmed = name.trim();
     if (!trimmed) return;
+
+    ensureStoredUserAvatar();
 
     const previous = usernameRef.current;
     usernameRef.current = trimmed;
@@ -806,17 +1159,23 @@ export default function ChatApp() {
     const room = openRoomsRef.current[roomName];
     const nick = getJoinUsername() || usernameRef.current;
 
-    if (room?.password && nick && !joiningRoomsRef.current.has(roomName)) {
+    if (isRoomPasswordKnown(room?.password) && nick && !joiningRoomsRef.current.has(roomName)) {
+      joiningRoomsRef.current.add(roomName);
+      updateJoiningState();
       socketService.emit('joinRoom', {
         roomName,
         password: room.password,
         username: room.assignedUsername || nick,
         restore: true,
+        noPassword: isOpenRoomPassword(room.password),
+        ...getJoinAvatarPayload(),
       });
     }
 
     if (fullscreenRoom && !isCompact) {
       if (roomName === fullscreenRoom && focusedRoom === roomName) {
+        if (Object.keys(openRoomsRef.current).length <= 1) return;
+
         setExpandedRooms((prev) => prev.filter((name) => name !== roomName));
         setFullscreenRoom(null);
         return;
@@ -829,6 +1188,9 @@ export default function ChatApp() {
     }
 
     if (expandedRooms.includes(roomName) && focusedRoom === roomName) {
+      const openCount = Object.keys(openRoomsRef.current).length;
+      if (isCompact && openCount <= 1) return;
+
       setExpandedRooms((prev) => prev.filter((name) => name !== roomName));
       setFullscreenRoom((prev) => (prev === roomName ? null : prev));
       return;
@@ -840,17 +1202,38 @@ export default function ChatApp() {
     }
 
     maximizeRoom(roomName);
-  }, [maximizeRoom, focusRoom, expandedRooms, focusedRoom, fullscreenRoom, isCompact]);
+  }, [maximizeRoom, focusRoom, expandedRooms, focusedRoom, fullscreenRoom, isCompact, updateJoiningState]);
 
   const handleFocusRoom = useCallback((roomName) => {
     focusRoom(roomName);
   }, [focusRoom]);
 
   const handleMinimizeRoom = useCallback((roomName) => {
+    if (isCompact) {
+      setMobileChatsCollapsed(true);
+      setFullscreenRoom(null);
+      setExpandedRooms([]);
+      return;
+    }
+
     setExpandedRooms((prev) => prev.filter((name) => name !== roomName));
     setFullscreenRoom((prev) => (prev === roomName ? null : prev));
     if (pipRooms.includes(roomName)) closePiP(roomName);
-  }, [pipRooms, closePiP]);
+  }, [isCompact, pipRooms, closePiP]);
+
+  const handleRestoreMobileChats = useCallback(() => {
+    if (!isCompact) return;
+
+    const names = Object.keys(openRoomsRef.current);
+    if (names.length === 0) return;
+
+    const room = (focusedRoom && openRoomsRef.current[focusedRoom])
+      ? focusedRoom
+      : names[0];
+
+    setMobileChatsCollapsed(false);
+    maximizeRoom(room);
+  }, [isCompact, focusedRoom, maximizeRoom]);
 
   const handleToggleFullscreen = useCallback((roomName) => {
     if (!roomName) return;
@@ -896,36 +1279,48 @@ export default function ChatApp() {
   }, []);
 
   const handleJoinDiscoverRoom = useCallback((roomName) => {
+    const meta = findActiveRoomMeta(activeRoomsRef.current, roomName);
+    if (meta?.isOpen) {
+      setRoomError('');
+      void joinRoom(roomName, '');
+      return;
+    }
     const savedPassword = getRoomPassword(roomName)
-      || openRoomsRef.current[roomName]?.password
-      || '';
+      ?? openRoomsRef.current[roomName]?.password
+      ?? '';
     handleOpenJoinModal(roomName, savedPassword);
-  }, [handleOpenJoinModal]);
+  }, [handleOpenJoinModal, joinRoom]);
 
-  const handleJoinModalSubmit = useCallback((roomName, password) => {
+  const handleJoinModalSubmit = useCallback((roomName, password, { noPassword = false } = {}) => {
     setJoinModal({ open: true, roomName, password });
     setRoomError('');
-    void joinRoom(roomName, password);
+    void joinRoom(roomName, password, { noPassword });
   }, [joinRoom]);
 
   const handleSendMessage = useCallback(async (roomName, messageContent) => {
     const room = openRoomsRef.current[roomName];
     if (!socketService.socket || !roomName || !room) return;
+    if (!consumeMessageSendSlot(roomName)) return;
 
     try {
-      if (!hasRoomKey(roomName)) await setRoomKey(roomName, room.password);
+      await ensureRoomKey(roomName, isRoomPasswordKnown(room.password) ? room.password : '');
       const encrypted = await encryptMessage(roomName, buildTextPayload(messageContent));
       socketService.emit('sendMessage', { roomName, content: encrypted, encrypted: true, type: 'text' });
     } catch {
       appendSystemMessage(roomName, tRef.current('errors.encryptFailed'));
     }
-  }, [appendSystemMessage]);
+  }, [appendSystemMessage, consumeMessageSendSlot]);
 
   const handleSendImage = useCallback(async (roomName, file) => {
     const room = openRoomsRef.current[roomName];
     const nick = room?.assignedUsername || usernameRef.current;
     if (!socketService.socket || !roomName || !room || !nick) {
       throw new Error(tRef.current('errors.noConnection'));
+    }
+    if (!consumeMessageSendSlot(roomName)) {
+      throw new Error(tRef.current('errors.messageRateLimit', {
+        seconds: Math.max(1, Math.ceil(messageSendLimiterRef.current.getRetryAfterMs() / 1000)),
+      }));
     }
 
     const imageId = generateMessageId();
@@ -949,7 +1344,7 @@ export default function ChatApp() {
     }
 
     try {
-      if (!hasRoomKey(roomName)) await setRoomKey(roomName, room.password);
+      await ensureRoomKey(roomName, isRoomPasswordKnown(room.password) ? room.password : '');
       const encrypted = await encryptMessage(roomName, buildImagePayload(imageId, mime, data));
       socketService.emit('sendMessage', {
         roomName,
@@ -962,7 +1357,7 @@ export default function ChatApp() {
     } catch {
       throw new Error(tRef.current('errors.imageSend'));
     }
-  }, []);
+  }, [consumeMessageSendSlot]);
 
   const handleLeaveRoom = useCallback((roomName) => {
     socketService.emit('leaveRoom', { roomName });
@@ -981,6 +1376,10 @@ export default function ChatApp() {
     setExpandedRooms((prev) => prev.filter((name) => name !== roomName));
     setFullscreenRoom((prev) => (prev === roomName ? null : prev));
     if (pipRooms.includes(roomName)) closePiP(roomName);
+
+    if (Object.keys(openRoomsRef.current).length === 0) {
+      setMobileChatsCollapsed(false);
+    }
 
     if (activeRoomRef.current === roomName) {
       const remaining = Object.keys(openRoomsRef.current).filter((name) => name !== roomName);
@@ -1009,6 +1408,7 @@ export default function ChatApp() {
           messages: room.messages,
           displayName: room.assignedUsername || username,
           quickEmoji: room.quickEmoji || DEFAULT_QUICK_EMOJI,
+          userProfiles: room.userProfiles || {},
         };
       })
       .filter(Boolean);
@@ -1031,6 +1431,7 @@ export default function ChatApp() {
           onCloseRoom={closePiP}
           onSendMessage={handleSendMessage}
           onSendImage={handleSendImage}
+          sendCooldownSeconds={messageSendCooldownSeconds}
         />
       </PiPRoot>,
     );
@@ -1044,6 +1445,7 @@ export default function ChatApp() {
     setActivePipRoom,
     handleSendMessage,
     handleSendImage,
+    messageSendCooldownSeconds,
     lang,
   ]);
 
@@ -1076,6 +1478,13 @@ export default function ChatApp() {
 
     const isFullscreenMode = mode === 'fullscreen';
     const forcedFullscreen = isCompact;
+    const openChannelCount = Object.keys(openRooms).length;
+    const allowMinimize = isCompact ? openChannelCount >= 1 : openChannelCount > 1;
+    const resolvedPassword = isRoomPasswordKnown(roomData.password)
+      ? roomData.password
+      : (getRoomPassword(roomName) ?? '');
+
+    const getSenderProfile = (sender) => resolveSenderProfile(roomData, sender, username);
 
     return (
       <ChatWindow
@@ -1086,9 +1495,9 @@ export default function ChatApp() {
         onSendMessage={(text) => handleSendMessage(roomName, text)}
         onSendImage={(file) => handleSendImage(roomName, file)}
         roomName={roomName}
-        roomPassword={roomData.password}
+        roomPassword={resolvedPassword}
         onLeaveRoom={() => handleLeaveRoom(roomName)}
-        onMinimize={() => handleMinimizeRoom(roomName)}
+        onMinimize={allowMinimize ? () => handleMinimizeRoom(roomName) : undefined}
         onToggleFullscreen={forcedFullscreen ? undefined : () => handleToggleFullscreen(roomName)}
         onTogglePiP={() => handleTogglePiP(roomName)}
         isPiPActive={pipRooms.includes(roomName)}
@@ -1098,6 +1507,10 @@ export default function ChatApp() {
         currentUsername={username}
         assignedUsername={roomData.assignedUsername}
         quickEmoji={roomData.quickEmoji}
+        roomUserCount={resolveRoomUserCount(activeRooms, roomName, roomData)}
+        activeRooms={activeRooms}
+        getSenderProfile={getSenderProfile}
+        sendCooldownSeconds={messageSendCooldownSeconds}
       />
     );
   };
@@ -1149,7 +1562,13 @@ export default function ChatApp() {
               <p className="welcome-card__text">
                 {t('welcome.text')}
               </p>
-              <UserNameInput onSetUsername={handleSetUsername} initialName={username} />
+              <UserNameInput
+                onSetUsername={handleSetUsername}
+                onClearUser={handleClearUser}
+                onAvatarChange={handleAvatarChange}
+                clearInProfileModal={false}
+                initialName={username}
+              />
             </section>
           </div>
           <AppSiteFooter variant="welcome" />
@@ -1164,7 +1583,13 @@ export default function ChatApp() {
           fullscreenRoom={fullscreenRoom}
           pipRooms={pipRooms}
           isCompact={isCompact}
+          mobileChatsCollapsed={mobileChatsCollapsed}
+          onRestoreMobileChats={handleRestoreMobileChats}
           onSetUsername={handleSetUsername}
+          onClearUser={handleClearUser}
+          onClearProfile={handleClearProfileRequest}
+          syncedProfileAvatar={syncedProfileAvatar}
+          onAvatarChange={handleAvatarChange}
           onToggleRoom={handleToggleRoom}
           onFocusRoom={handleFocusRoom}
           onCloseRoom={handleLeaveRoom}

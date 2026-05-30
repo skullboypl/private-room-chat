@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import Message from '@/components/Message';
 import MessageInput from '@/components/MessageInput';
 import { useTranslation } from '@/context/LocaleContext';
+import { resolveSenderProfile } from '@/lib/resolveSenderProfile';
 import './ChatPiPView.css';
 
 export default function ChatPiPView({
@@ -13,6 +14,7 @@ export default function ChatPiPView({
   onCloseRoom,
   onSendMessage,
   onSendImage,
+  sendCooldownSeconds = 0,
 }) {
   const { t } = useTranslation();
   const messagesEndRef = useRef(null);
@@ -24,8 +26,14 @@ export default function ChatPiPView({
 
   if (!current) return null;
 
-  const { roomName, messages, displayName, quickEmoji } = current;
+  const { roomName, messages, displayName, quickEmoji, userProfiles = {} } = current;
   const showTabs = rooms.length > 1;
+
+  const getSenderProfile = (sender) => resolveSenderProfile(
+    { assignedUsername: displayName, userProfiles },
+    sender,
+    displayName,
+  );
 
   return (
     <div className="chat-pip">
@@ -88,19 +96,29 @@ export default function ChatPiPView({
         {messages.length === 0 && (
           <p className="chat-pip__empty">{t('chat.emptyPip')}</p>
         )}
-        {messages.map((msg, index) => (
-          <Message
-            key={msg.messageId || msg.imageId || `pip-${roomName}-${index}-${msg.timestamp}-${msg.sender}`}
-            sender={msg.sender}
-            content={msg.content}
-            timestamp={msg.timestamp}
-            type={msg.type}
-            imageId={msg.imageId}
-            roomName={roomName}
-            isCurrentUser={msg.sender === displayName}
-            isSystem={msg.sender === 'System'}
-          />
-        ))}
+        {messages.map((msg, index) => {
+          const profile = getSenderProfile(msg.sender);
+          return (
+            <Message
+              key={[
+                msg.messageId || msg.imageId || `pip-${roomName}-${index}-${msg.timestamp}`,
+                msg.sender,
+                profile.avatarSeed || '',
+                profile.avatarStyle || '',
+              ].join('-')}
+              sender={msg.sender}
+              content={msg.content}
+              timestamp={msg.timestamp}
+              type={msg.type}
+              imageId={msg.imageId}
+              roomName={roomName}
+              isCurrentUser={msg.sender === displayName}
+              isSystem={msg.sender === 'System'}
+              avatarSeed={profile.avatarSeed}
+              avatarStyle={profile.avatarStyle}
+            />
+          );
+        })}
         <div ref={messagesEndRef} />
       </div>
 
@@ -110,6 +128,7 @@ export default function ChatPiPView({
         onSendMessage={(text) => onSendMessage(roomName, text)}
         onSendImage={(file) => onSendImage(roomName, file)}
         compact
+        sendCooldownSeconds={sendCooldownSeconds}
       />
     </div>
   );

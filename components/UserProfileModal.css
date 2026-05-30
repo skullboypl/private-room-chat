@@ -1,0 +1,70 @@
+.user-profile-modal-overlay {
+  z-index: 10080;
+}
+
+.user-profile-modal {
+  max-width: 380px;
+}
+
+.user-profile-modal__hint {
+  margin-bottom: 1.25rem;
+}
+
+.user-profile-modal__form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
+.user-profile-modal__avatar-block {
+  display: flex;
+  justify-content: center;
+}
+
+.user-profile-modal__avatar-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.user-profile-modal__avatar {
+  width: 88px;
+  height: 88px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.user-profile-modal__avatar-placeholder {
+  width: 88px;
+  height: 88px;
+  border-radius: var(--radius-full);
+  border: 2px dashed var(--border);
+  background: var(--bg-input);
+}
+
+.user-profile-modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.15rem;
+}
+
+.user-profile-modal__actions .btn--primary {
+  flex: 1 1 auto;
+}
+
+.user-profile-modal__clear {
+  align-self: center;
+  margin-top: 0.25rem;
+  padding: 0.35rem 0.5rem;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.user-profile-modal__clear:hover {
+  color: var(--text-primary);
+}

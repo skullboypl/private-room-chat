@@ -1,15 +1,132 @@
+.username-avatar-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.username-avatar-row__wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.username-avatar-row__img {
+  width: 52px;
+  height: 52px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+}
+
+.username-avatar-row__placeholder {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-full);
+  background: var(--bg-input);
+  border: 1px dashed var(--border);
+  flex-shrink: 0;
+}
+
+
+.username-form__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.username-form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.username-form__actions .btn--primary {
+  flex: 1 1 auto;
+}
+
+.username-form__clear {
+  flex-shrink: 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.username-form__clear:hover {
+  color: var(--text-primary);
+}
+
 .username-form--entry {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  align-items: stretch;
+  gap: 0.85rem;
   width: 100%;
-  max-width: 480px;
+  max-width: 100%;
 }
 
-.username-form--entry input {
+.profile-nick-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+  text-align: left;
+}
+
+.profile-nick-field__label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.profile-nick-field__row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.profile-nick-field__row .profile-nick-field__input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.profile-nick-field__input {
   width: 100%;
   min-width: 0;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: var(--font);
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color var(--transition);
+}
+
+.profile-nick-field__input::placeholder {
+  color: var(--text-muted);
+}
+
+.profile-nick-field__input:focus {
+  border-color: var(--border-focus);
+  box-shadow: none;
+  outline: none;
+}
+
+.welcome-card .profile-nick-field__input,
+.user-profile-modal .profile-nick-field__input {
   text-align: center;
+}
+
+.welcome-card .profile-nick-field__input:focus,
+.user-profile-modal .profile-nick-field__input:focus {
+  box-shadow: none;
+}
+
+.username-form--entry .profile-nick-field {
+  width: 100%;
 }
 
 .username-form--entry .btn {
@@ -18,10 +135,19 @@
 
 .username-form.username-form--compact {
   display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  align-items: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.username-form.username-form--compact .username-avatar-row {
+  justify-content: flex-start;
+}
+
+.username-form.username-form--compact .username-avatar-row__img {
+  width: 36px;
+  height: 36px;
 }
 
 .username-form.username-form--compact input[type="text"] {
@@ -47,19 +173,27 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-full);
   flex-shrink: 0;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.username-pill:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.username-pill--empty {
+  padding: 0.45rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 
 .username-pill__avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-full);
-  background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  font-size: 0.8rem;
-  color: white;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
 }
 
@@ -73,31 +207,16 @@
   white-space: nowrap;
 }
 
-.username-pill__edit {
-  padding: 0.25rem 0.625rem;
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-full);
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: color var(--transition), background var(--transition);
-}
-
-.username-pill__edit:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.06);
-}
-
 .btn--sm {
   padding: 0.5rem 0.875rem;
   font-size: 0.8rem;
 }
 
 @media (max-width: 600px) {
-  .welcome-card {
-    padding: 2rem 1.25rem;
+  .username-avatar-row__img,
+  .username-avatar-row__placeholder {
+    width: 48px;
+    height: 48px;
   }
 
   .username-pill__name {
