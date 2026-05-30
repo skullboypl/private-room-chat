@@ -23,9 +23,9 @@ export default function RoomJoinCreateForm({ onJoinRoom, error, initialRoomName 
   return (
     <>
       <h3 id="join-heading" className="section-title">{t('rooms.joinSection')}</h3>
-      <form onSubmit={handleSubmit}>
-        <input type="text" value={roomName} onChange={(e) => setRoomName(e.target.value)} placeholder={t('rooms.roomPlaceholder')} required aria-label={t('joinModal.roomName')} autoComplete="off" maxLength={64} />
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('rooms.passwordPlaceholder')} required aria-label={t('rooms.passwordAria')} autoComplete="off" />
+      <form onSubmit={handleSubmit} autoComplete="off">
+        <input type="text" name="vxh-room" value={roomName} onChange={(e) => setRoomName(e.target.value)} placeholder={t('rooms.roomPlaceholder')} required aria-label={t('joinModal.roomName')} autoComplete="off" maxLength={64} />
+        <input type="password" name="vxh-room-pass" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('rooms.passwordPlaceholder')} required aria-label={t('rooms.passwordAria')} autoComplete="new-password" data-lpignore="true" data-1p-ignore="true" />
         <button type="submit" className="btn btn--primary">{t('rooms.submit')}</button>
       </form>
       {error && <p className="error-message" role="alert">{translateRoomError(error, t)}</p>}

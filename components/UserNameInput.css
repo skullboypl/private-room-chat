@@ -104,3 +104,13 @@
     max-width: 80px;
   }
 }
+
+@media (max-width: 420px) {
+  .username-pill__name {
+    max-width: 64px;
+  }
+
+  .username-form.username-form--compact input[type="text"] {
+    width: min(120px, 36vw);
+  }
+}

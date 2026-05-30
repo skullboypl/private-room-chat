@@ -28,7 +28,9 @@ import JoinRoomModal from '@/components/JoinRoomModal';
 import MessengerDock from '@/components/MessengerDock';
 import ChatWindow from '@/components/ChatWindow';
 import ChatPiPView from '@/components/ChatPiPView';
+import PiPRoot from '@/components/PiPRoot';
 import { useDocumentPiP } from '@/hooks/useDocumentPiP';
+import { isDocumentPiPSupported, requestDocumentPiPWindow } from '@/lib/documentPiP';
 import { isCompactViewport, COMPACT_VIEWPORT_MAX } from '@/lib/viewport';
 import { trimExpandedToViewport } from '@/lib/dockLayout';
 import { applyRoomQuickEmoji, DEFAULT_QUICK_EMOJI } from '@/lib/roomEmoji';
@@ -863,19 +865,27 @@ export default function ChatApp() {
     setFullscreenRoom((prev) => (prev === roomName ? null : roomName));
   }, [focusRoom, pipRooms, closePiP, isCompact]);
 
-  const handleTogglePiP = useCallback(async (roomName) => {
+  const handleTogglePiP = useCallback((roomName) => {
     if (!roomName) return;
     if (pipRooms.includes(roomName)) {
       closePiP(roomName);
       return;
     }
-    try {
-      if (fullscreenRoom === roomName) setFullscreenRoom(null);
-      focusRoom(roomName);
-      await openPiP(roomName);
-    } catch (err) {
-      setRoomError(err?.message || tRef.current('errors.pipUnsupported'));
-    }
+
+    const prestartedRequest = isDocumentPiPSupported()
+      && !window.documentPictureInPicture?.window
+      ? requestDocumentPiPWindow()
+      : null;
+
+    void (async () => {
+      try {
+        if (fullscreenRoom === roomName) setFullscreenRoom(null);
+        focusRoom(roomName);
+        await openPiP(roomName, prestartedRequest);
+      } catch (err) {
+        setRoomError(err?.message || tRef.current('errors.pipUnsupported'));
+      }
+    })();
   }, [pipRooms, closePiP, openPiP, focusRoom, fullscreenRoom]);
 
   const handleOpenJoinModal = useCallback((roomName = '', password = '') => {
@@ -1013,14 +1023,16 @@ export default function ChatApp() {
       : roomsPayload[roomsPayload.length - 1].roomName;
 
     updatePiPContent(
-      <ChatPiPView
-        rooms={roomsPayload}
-        activeRoom={active}
-        onSelectRoom={setActivePipRoom}
-        onCloseRoom={closePiP}
-        onSendMessage={handleSendMessage}
-        onSendImage={handleSendImage}
-      />,
+      <PiPRoot key={lang} lang={lang}>
+        <ChatPiPView
+          rooms={roomsPayload}
+          activeRoom={active}
+          onSelectRoom={setActivePipRoom}
+          onCloseRoom={closePiP}
+          onSendMessage={handleSendMessage}
+          onSendImage={handleSendImage}
+        />
+      </PiPRoot>,
     );
   }, [
     pipRooms,

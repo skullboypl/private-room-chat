@@ -63,13 +63,15 @@ export function useDocumentPiP() {
     });
   }, []);
 
-  const ensurePiPWindow = useCallback(async () => {
+  const ensurePiPWindow = useCallback(async (prestartedRequest) => {
     let pipWindow = pipWindowRef.current;
     if (pipWindow && !pipWindow.closed) {
       return pipWindow;
     }
 
-    pipWindow = await requestDocumentPiPWindow();
+    pipWindow = prestartedRequest
+      ? await prestartedRequest
+      : await requestDocumentPiPWindow();
     pipWindowRef.current = pipWindow;
     copyStylesToWindow(pipWindow);
 
@@ -90,10 +92,10 @@ export function useDocumentPiP() {
     return pipWindow;
   }, [destroyPiPWindow]);
 
-  const openPiP = useCallback(async (roomName) => {
+  const openPiP = useCallback(async (roomName, prestartedRequest) => {
     if (!roomName) return;
 
-    await ensurePiPWindow();
+    await ensurePiPWindow(prestartedRequest);
 
     setPipState((prev) => {
       const rooms = prev.rooms.includes(roomName)
@@ -113,8 +115,10 @@ export function useDocumentPiP() {
 
     try {
       root.render(element);
-    } catch {
-      /* root już odmontowany */
+    } catch (err) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[PiP] render failed:', err);
+      }
     }
   }, []);
 
@@ -131,7 +135,6 @@ export function useDocumentPiP() {
 
     return () => {
       pipApi.removeEventListener('leave', onLeave);
-      destroyPiPWindow();
     };
   }, [destroyPiPWindow]);
 

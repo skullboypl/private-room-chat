@@ -70,7 +70,7 @@ export default function JoinRoomModal({
             ? t('joinModal.roomTakenSubtitle', { room: trimmedRoomName })
             : t('joinModal.createHint')}
         </p>
-        <form onSubmit={handleSubmit} className="modal-form">
+        <form onSubmit={handleSubmit} className="modal-form" autoComplete="off">
           {roomExists && (
             <p className="modal-form__notice modal-form__notice--exists" role="status">
               {t('joinModal.roomTakenNotice')}
@@ -80,6 +80,7 @@ export default function JoinRoomModal({
           <input
             id="join-room"
             type="text"
+            name="vxh-room"
             value={roomName}
             onChange={(e) => handleRoomNameChange(e.target.value)}
             placeholder={t('rooms.roomPlaceholder')}
@@ -95,11 +96,14 @@ export default function JoinRoomModal({
           <input
             id="join-pwd"
             type="password"
+            name="vxh-room-pass"
             value={password}
             onChange={(e) => handlePasswordChange(e.target.value)}
             placeholder={roomExists ? t('joinModal.passwordPlaceholderJoin') : t('joinModal.passwordPlaceholder')}
             required
-            autoComplete="off"
+            autoComplete="new-password"
+            data-lpignore="true"
+            data-1p-ignore="true"
             disabled={joining}
             aria-invalid={Boolean(error) || undefined}
           />

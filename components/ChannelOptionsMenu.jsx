@@ -33,9 +33,18 @@ export default function ChannelOptionsMenu({
     const anchor = anchorRef?.current;
     if (!anchor) return;
     const rect = anchor.getBoundingClientRect();
+    const mobile = window.innerWidth <= 640;
+    const menuWidth = mobile
+      ? Math.min(window.innerWidth - 24, 420)
+      : Math.min(280, window.innerWidth - 16);
+    const left = mobile
+      ? (window.innerWidth - menuWidth) / 2
+      : Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8));
+    const preferredTop = rect.bottom + (mobile ? 10 : 6);
+    const maxTop = window.innerHeight - 120;
     setPosition({
-      top: rect.bottom + 6,
-      left: Math.max(8, Math.min(rect.left, window.innerWidth - 288)),
+      top: Math.max(8, Math.min(preferredTop, maxTop)),
+      left,
     });
   }, [anchorRef]);
 

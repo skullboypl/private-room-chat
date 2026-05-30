@@ -45,14 +45,16 @@ export default function UserNameInput({ onSetUsername, compact = false, initialN
 
   if (compact && isEditing) {
     return (
-      <form onSubmit={handleSubmit} className="username-form username-form--compact">
+      <form onSubmit={handleSubmit} className="username-form username-form--compact" autoComplete="off">
         <input
           type="text"
+          name="vxh-nick"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder={t('welcome.nickPlaceholderShort')}
           required
           aria-label={t('welcome.nickAria')}
+          autoComplete="nickname"
           maxLength={32}
           autoFocus
         />
@@ -62,15 +64,16 @@ export default function UserNameInput({ onSetUsername, compact = false, initialN
   }
 
   return (
-    <form onSubmit={handleSubmit} className="username-form username-form--entry">
+    <form onSubmit={handleSubmit} className="username-form username-form--entry" autoComplete="off">
       <input
         type="text"
+        name="vxh-nick"
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder={t('welcome.nickPlaceholder')}
         required
         aria-label={t('welcome.nickAria')}
-        autoComplete="username"
+        autoComplete="nickname"
         maxLength={32}
       />
       <button type="submit" className="btn btn--primary">{t('welcome.enter')}</button>

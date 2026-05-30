@@ -25,16 +25,17 @@ export default function InviteModal({ roomName, onJoin, error, joining }) {
         <p className="modal-card__subtitle">
           {t('invite.joining', { room: roomName })}
         </p>
-        <form onSubmit={handleSubmit} className="modal-form">
+        <form onSubmit={handleSubmit} className="modal-form" autoComplete="off">
           <label className="modal-form__label" htmlFor="invite-nick">{t('invite.yourNick')}</label>
           <input
             id="invite-nick"
             type="text"
+            name="vxh-nick"
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder={t('invite.nickPlaceholder')}
             required
-            autoComplete="username"
+            autoComplete="nickname"
             maxLength={32}
             autoFocus
             disabled={joining}

@@ -34,8 +34,10 @@
 .messenger-global-error {
   position: fixed;
   left: 50%;
-  bottom: 5rem;
+  bottom: max(5rem, calc(5rem + var(--safe-bottom)));
   transform: translateX(-50%);
+  margin-left: var(--safe-left);
+  margin-right: var(--safe-right);
   z-index: 900;
   max-width: min(90vw, 420px);
   margin: 0;
@@ -105,7 +107,7 @@
   align-items: center;
   min-height: 0;
   width: 100%;
-  padding: 1.5rem 1rem;
+  padding: max(1.5rem, var(--safe-top)) max(1rem, var(--safe-right)) 1.5rem max(1rem, var(--safe-left));
 }
 
 .welcome-card {

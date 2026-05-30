@@ -40,7 +40,7 @@
 }
 
 .fb-layout--dock-rail .fb-main {
-  padding-right: clamp(160px, 18vw, 220px);
+  padding-right: calc(clamp(160px, 18vw, 220px) + var(--safe-right));
 }
 
 .fb-layout--fullscreen {
@@ -66,7 +66,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.65rem 1.25rem;
+  padding: max(0.65rem, var(--safe-top)) max(1.25rem, var(--safe-right)) 0.65rem max(1.25rem, var(--safe-left));
   border-bottom: 1px solid var(--border);
   background: var(--bg-elevated);
   flex-shrink: 0;
@@ -77,12 +77,20 @@
   align-items: center;
   gap: 0.65rem;
   min-width: 0;
+  flex: 1 1 auto;
+}
+
+.fb-topbar__brand > div {
+  min-width: 0;
 }
 
 .fb-topbar__title {
   font-size: 1rem;
   font-weight: 700;
   color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .fb-topbar__subtitle {
@@ -95,13 +103,15 @@
   align-items: center;
   gap: 0.65rem;
   flex-shrink: 0;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .fb-room-bar {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0.5rem 12px;
+  padding: 0.5rem max(12px, var(--safe-right)) 0.5rem max(12px, var(--safe-left));
   min-height: 52px;
   background: var(--bg-elevated);
   border-bottom: 1px solid var(--border);
@@ -312,7 +322,7 @@
   align-items: flex-end;
   justify-content: flex-end;
   gap: 12px;
-  padding: 0 16px 16px;
+  padding: 0 max(16px, var(--safe-right)) max(16px, var(--safe-bottom)) max(16px, var(--safe-left));
   pointer-events: none;
 }
 
@@ -463,11 +473,31 @@
 
 @media (max-width: 640px) {
   .fb-topbar {
-    padding: 0.55rem 0.85rem;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.65rem;
+    padding-top: max(0.55rem, var(--safe-top));
+    padding-right: max(0.85rem, var(--safe-right));
+    padding-bottom: 0.55rem;
+    padding-left: max(0.85rem, var(--safe-left));
+  }
+
+  .fb-topbar__subtitle {
+    display: none;
+  }
+
+  .fb-topbar__title {
+    font-size: 0.92rem;
+  }
+
+  .fb-topbar__actions {
+    gap: 0.4rem;
   }
 
   .fb-room-bar {
-    padding: 0.45rem 8px;
+    padding-top: 0.45rem;
+    padding-bottom: 0.45rem;
+    padding-left: max(8px, var(--safe-left));
+    padding-right: max(8px, var(--safe-right));
   }
 
   .fb-room-tab {
@@ -486,5 +516,21 @@
 
   .fb-dock-rail-item__name {
     max-width: clamp(2.5rem, 22vw, 5rem);
+  }
+}
+
+@media (max-width: 420px) {
+  .fb-topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .fb-topbar__brand {
+    flex: 0 1 auto;
+  }
+
+  .fb-topbar__actions {
+    justify-content: space-between;
+    width: 100%;
   }
 }

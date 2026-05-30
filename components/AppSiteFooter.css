@@ -25,7 +25,7 @@
 
 .app-site-footer--welcome .app-site-footer__inner {
   max-width: 1100px;
-  padding: 1.25rem 1rem 1.5rem;
+  padding: 1.25rem max(1rem, var(--safe-right)) max(1.5rem, var(--safe-bottom)) max(1rem, var(--safe-left));
 }
 
 .app-site-footer--dock {
@@ -41,6 +41,9 @@
 
 .app-site-footer--dock .app-site-footer__inner {
   max-width: 1100px;
+  padding-bottom: max(1.5rem, var(--safe-bottom));
+  padding-left: max(1rem, var(--safe-left));
+  padding-right: max(1rem, var(--safe-right));
 }
 
 .app-site-footer__nav {

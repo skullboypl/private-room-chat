@@ -7,14 +7,20 @@ import { readStoredLocale, writeStoredLocale } from '@/lib/i18n/locale';
 
 const LocaleContext = createContext(null);
 
-export function LocaleProvider({ children }) {
-  const [lang, setLangState] = useState(DEFAULT_LOCALE);
-  const [ready, setReady] = useState(false);
+export function LocaleProvider({ children, initialLang }) {
+  const [lang, setLangState] = useState(() => (
+    initialLang && isLocale(initialLang) ? initialLang : DEFAULT_LOCALE
+  ));
+  const [ready, setReady] = useState(() => Boolean(initialLang && isLocale(initialLang)));
 
   useEffect(() => {
+    if (initialLang && isLocale(initialLang)) {
+      setReady(true);
+      return;
+    }
     setLangState(readStoredLocale());
     setReady(true);
-  }, []);
+  }, [initialLang]);
 
   useEffect(() => {
     if (!ready) return;

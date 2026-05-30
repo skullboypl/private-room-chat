@@ -2,12 +2,16 @@
   position: fixed;
   z-index: 10050;
   width: min(280px, calc(100vw - 16px));
-  background: var(--bg-elevated, #1e1e2e);
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  background-color: #1c1c28;
+  background-image: none;
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: var(--radius-lg, 12px);
-  box-shadow: var(--shadow-md, 0 8px 32px rgba(0, 0, 0, 0.45));
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(0, 0, 0, 0.35);
   overflow: hidden;
   animation: channelOptionsIn 0.15s ease-out;
+  isolation: isolate;
 }
 
 @keyframes channelOptionsIn {
@@ -27,7 +31,8 @@
   justify-content: space-between;
   gap: 0.5rem;
   padding: 0.65rem 0.75rem;
-  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  background-color: #1c1c28;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   font-size: 0.9rem;
 }
 
@@ -49,14 +54,15 @@
 
 .channel-options-tabs {
   display: flex;
-  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  background-color: #181822;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .channel-options-tabs button {
   flex: 1;
   padding: 0.45rem 0.25rem;
   font-size: 0.72rem;
-  background: transparent;
+  background-color: transparent;
   border: none;
   color: var(--text-muted, #888);
   cursor: pointer;
@@ -72,6 +78,7 @@
   max-height: 240px;
   overflow-y: auto;
   padding: 0.65rem 0.75rem;
+  background-color: #1c1c28;
 }
 
 .channel-options-section {
@@ -103,7 +110,7 @@
   flex: 1;
   min-width: 0;
   padding: 0.35rem 0.5rem;
-  background: var(--bg-input, rgba(0, 0, 0, 0.25));
+  background-color: #252532;
   border-radius: var(--radius-sm, 6px);
   font-size: 0.8125rem;
   overflow: hidden;
@@ -114,9 +121,9 @@
   flex-shrink: 0;
   padding: 0.35rem 0.6rem;
   font-size: 0.75rem;
-  border: 1px solid var(--border, rgba(255, 255, 255, 0.15));
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: var(--radius-sm, 6px);
-  background: transparent;
+  background-color: #252532;
   color: var(--text-primary, #eee);
   cursor: pointer;
 }
@@ -152,7 +159,7 @@
 .channel-options-users li {
   font-size: 0.875rem;
   padding: 0.35rem 0.5rem;
-  background: var(--bg-input, rgba(0, 0, 0, 0.2));
+  background-color: #252532;
   border-radius: var(--radius-sm, 6px);
 }
 
@@ -173,7 +180,7 @@
   padding: 0.35rem;
   border: 1px solid transparent;
   border-radius: var(--radius-sm, 6px);
-  background: var(--bg-input, rgba(0, 0, 0, 0.2));
+  background-color: #252532;
   cursor: pointer;
 }
 
@@ -201,4 +208,90 @@
 .chat-dock-toolbar-title-btn:hover,
 .chat-header-title-btn:hover {
   color: var(--accent-hover, #7c9cff);
+}
+
+@media (max-width: 640px) {
+  .channel-options-menu {
+    width: calc(100vw - 24px);
+    max-width: 420px;
+    border-radius: var(--radius-xl, 16px);
+    box-shadow:
+      0 20px 56px rgba(0, 0, 0, 0.65),
+      0 0 0 1px rgba(0, 0, 0, 0.4);
+  }
+
+  .channel-options-header {
+    padding: 1rem 1rem;
+    font-size: 1.05rem;
+  }
+
+  .channel-options-header strong {
+    font-size: 1.05rem;
+  }
+
+  .channel-options-close {
+    width: 2.25rem;
+    height: 2.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    border-radius: var(--radius-full, 9999px);
+    background-color: #252532;
+  }
+
+  .channel-options-tabs button {
+    padding: 0.85rem 0.35rem;
+    font-size: 0.8rem;
+    min-height: 48px;
+  }
+
+  .channel-options-body {
+    max-height: min(52dvh, 380px);
+    padding: 1rem;
+  }
+
+  .channel-options-label {
+    font-size: 0.8rem;
+  }
+
+  .channel-options-muted {
+    font-size: 0.9rem;
+  }
+
+  .channel-options-password-row code {
+    padding: 0.55rem 0.65rem;
+    font-size: 0.9rem;
+  }
+
+  .channel-options-password-row button {
+    padding: 0.55rem 0.85rem;
+    font-size: 0.85rem;
+    min-height: 44px;
+  }
+
+  .channel-options-users li {
+    padding: 0.65rem 0.75rem;
+    font-size: 0.95rem;
+  }
+
+  .channel-options-emoji-current {
+    font-size: 2.5rem;
+    padding: 0.5rem;
+  }
+
+  .channel-options-emoji-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+  }
+
+  .channel-options-emoji-grid button {
+    font-size: 1.65rem;
+    padding: 0.65rem;
+    min-height: 52px;
+  }
+
+  .channel-options-media-grid {
+    gap: 0.5rem;
+  }
 }
