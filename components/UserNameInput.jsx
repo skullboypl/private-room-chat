@@ -48,12 +48,7 @@ export default function UserNameInput({
   const [profileOpen, setProfileOpen] = useState(false);
   const [avatarSeed, setAvatarSeed] = useState(() => {
     if (typeof window === 'undefined') return '';
-    const stored = readStoredUserAvatarSeed();
-    if (stored) return stored;
-    if (readStoredUsername()) return '';
-    const { seed, style } = createRandomAvatar();
-    writeStoredUserAvatar(seed, style);
-    return seed;
+    return readStoredUserAvatarSeed() || '';
   });
   const [avatarStyle, setAvatarStyle] = useState(readStoredUserAvatarStyle);
   const [draftName, setDraftName] = useState('');

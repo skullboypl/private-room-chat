@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { socketService } from '@/lib/socket/client';
 import {
   ensureRoomKey,
@@ -73,10 +73,10 @@ import {
 } from '@/lib/messageSendRateLimit';
 import {
   getJoinAvatarPayload,
+  readProfileAvatarFromStorage,
   readStoredUserAvatarSeed,
   readStoredUserAvatarStyle,
   writeStoredUserAvatar,
-  ensureStoredUserAvatar,
 } from '@/lib/userAvatarStorage';
 import { resolveSenderProfile } from '@/lib/resolveSenderProfile';
 import { invalidateUserAvatarCache } from '@/lib/userAvatar';
@@ -245,6 +245,7 @@ export default function ChatApp() {
   const [pendingInvite, setPendingInvite] = useState(null);
   const [joiningRoom, setJoiningRoom] = useState(false);
   const [joinModal, setJoinModal] = useState({ open: false, roomName: '', password: '' });
+  const [profileAvatar, setProfileAvatar] = useState(null);
   const joinModalRef = useRef(joinModal);
   const messageSendLimiterRef = useRef(null);
   if (!messageSendLimiterRef.current) {
@@ -437,11 +438,8 @@ export default function ChatApp() {
     if (stored) {
       setUsername(stored);
       setSocketActive(true);
-      if (readStoredUserAvatarSeed()) {
-        writeStoredUserAvatar(readStoredUserAvatarSeed(), readStoredUserAvatarStyle());
-      } else {
-        ensureStoredUserAvatar();
-      }
+      const avatar = readProfileAvatarFromStorage();
+      if (avatar) setProfileAvatar(avatar);
     }
     applyInviteFromUrl();
 
@@ -570,7 +568,7 @@ export default function ChatApp() {
         username: nick,
         restore,
         noPassword: isOpenRoomPassword(resolvedPassword),
-        ...getJoinAvatarPayload(),
+        ...getJoinAvatarPayload(nick),
       });
       return true;
     } catch {
@@ -751,7 +749,7 @@ export default function ChatApp() {
 
     socketService.connect();
 
-    const avatar = getJoinAvatarPayload();
+    const avatar = getJoinAvatarPayload(nick);
     const prepared = [];
 
     for (const entry of entries) {
@@ -861,7 +859,7 @@ export default function ChatApp() {
 
       const liveCount = Array.isArray(users) ? users.length : null;
       const roomNick = assignedUsername || prevRoom?.assignedUsername || usernameRef.current;
-      const localAvatar = getJoinAvatarPayload();
+      const localAvatar = readProfileAvatarFromStorage() || getJoinAvatarPayload(roomNick);
 
       syncOpenRooms((prev) => ({
         ...prev,
@@ -897,6 +895,8 @@ export default function ChatApp() {
 
       setRoomError('');
       setJoinModal({ open: false, roomName: '', password: '' });
+      const avatarFromStorage = readProfileAvatarFromStorage();
+      if (avatarFromStorage) setProfileAvatar(avatarFromStorage);
       socketService.emit('getRoomUsers', roomName);
     };
 
@@ -906,7 +906,7 @@ export default function ChatApp() {
         const room = prev[roomName];
         if (!room) return prev;
         const roomNick = room.assignedUsername;
-        const localAvatar = roomNick ? getJoinAvatarPayload() : null;
+        const localAvatar = roomNick ? getJoinAvatarPayload(roomNick) : null;
         return {
           ...prev,
           [roomName]: {
@@ -1087,7 +1087,7 @@ export default function ChatApp() {
           password: invite.password ?? '',
           username: fallbackNick,
           noPassword: isOpenRoomPassword(invite.password ?? ''),
-          ...getJoinAvatarPayload(),
+          ...getJoinAvatarPayload(fallbackNick),
         });
         return;
       }
@@ -1269,15 +1269,8 @@ export default function ChatApp() {
     return true;
   }, [syncOpenRooms, updateJoiningState, pipRooms, closePiP]);
 
-  const syncedProfileAvatar = useMemo(() => {
-    const storedSeed = readStoredUserAvatarSeed();
-    if (storedSeed) {
-      return {
-        avatarSeed: storedSeed,
-        avatarStyle: readStoredUserAvatarStyle(),
-      };
-    }
-    for (const room of Object.values(openRooms)) {
+  const pickProfileAvatarFromRooms = useCallback(() => {
+    for (const room of Object.values(openRoomsRef.current)) {
       const nick = room.assignedUsername;
       if (!nick) continue;
       const profile = room.userProfiles?.[nick];
@@ -1285,14 +1278,49 @@ export default function ChatApp() {
         return { avatarSeed: profile.avatarSeed, avatarStyle: profile.avatarStyle };
       }
     }
-    return getJoinAvatarPayload();
-  }, [openRooms]);
+    return null;
+  }, []);
+
+  const refreshProfileAvatar = useCallback(() => {
+    const fromStorage = readProfileAvatarFromStorage();
+    if (fromStorage) {
+      setProfileAvatar(fromStorage);
+      return;
+    }
+    const fromRooms = pickProfileAvatarFromRooms();
+    if (fromRooms) {
+      setProfileAvatar(fromRooms);
+      return;
+    }
+    const nick = getJoinUsername() || usernameRef.current;
+    if (nick) {
+      setProfileAvatar(getJoinAvatarPayload(nick));
+    }
+  }, [pickProfileAvatarFromRooms]);
+
+  const scheduleProfileAvatarStorageSync = useCallback(() => {
+    const sync = () => {
+      const fromStorage = readProfileAvatarFromStorage();
+      if (fromStorage) setProfileAvatar(fromStorage);
+    };
+    sync();
+    if (typeof window === 'undefined') return;
+    window.requestAnimationFrame(sync);
+    window.setTimeout(sync, 50);
+    window.setTimeout(sync, 150);
+  }, []);
+
+  useEffect(() => {
+    if (!username) return;
+    refreshProfileAvatar();
+  }, [username, openRooms, refreshProfileAvatar]);
 
   const handleAvatarChange = useCallback(({ avatarSeed, avatarStyle }) => {
     const seed = avatarSeed || readStoredUserAvatarSeed();
     const style = avatarStyle || readStoredUserAvatarStyle();
     writeStoredUserAvatar(seed, style);
     invalidateUserAvatarCache();
+    setProfileAvatar({ avatarSeed: seed, avatarStyle: style });
 
     syncOpenRooms((prev) => {
       const next = { ...prev };
@@ -1328,8 +1356,10 @@ export default function ChatApp() {
     if (!trimmed) return;
 
     if (avatarSeed) {
-      writeStoredUserAvatar(avatarSeed, avatarStyle || readStoredUserAvatarStyle());
+      const style = avatarStyle || readStoredUserAvatarStyle();
+      writeStoredUserAvatar(avatarSeed, style);
       invalidateUserAvatarCache();
+      setProfileAvatar({ avatarSeed, avatarStyle: style });
     }
 
     const previous = usernameRef.current;
@@ -1337,6 +1367,7 @@ export default function ChatApp() {
     localStorage.setItem('username', trimmed);
     setUsername(trimmed);
     setSocketActive(true);
+    scheduleProfileAvatarStorageSync();
 
     if (previous === trimmed) return;
 
@@ -1347,7 +1378,7 @@ export default function ChatApp() {
         socketService.emit('changeUsername', { roomName, newUsername: trimmed });
       }
     }
-  }, []);
+  }, [scheduleProfileAvatarStorageSync]);
 
   const handleInviteJoin = useCallback((name) => {
     handleSetUsername(name);
@@ -1372,7 +1403,7 @@ export default function ChatApp() {
         username: room.assignedUsername || nick,
         restore: true,
         noPassword: isOpenRoomPassword(room.password),
-        ...getJoinAvatarPayload(),
+        ...getJoinAvatarPayload(nick),
       });
     }
 
@@ -1762,7 +1793,7 @@ export default function ChatApp() {
           onSetUsername={handleSetUsername}
           onClearUser={handleClearUser}
           onClearProfile={handleClearProfileRequest}
-          syncedProfileAvatar={syncedProfileAvatar}
+          syncedProfileAvatar={profileAvatar}
           onAvatarChange={handleAvatarChange}
           onToggleRoom={handleToggleRoom}
           onFocusRoom={handleFocusRoom}
