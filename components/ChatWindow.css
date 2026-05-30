@@ -1,17 +1,18 @@
 .chat-window {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  min-height: 0;
   background: var(--bg-base);
   background-image:
     radial-gradient(ellipse 60% 40% at 50% 0%, rgba(99, 102, 241, 0.1), transparent);
 }
 
 .chat-window--panel {
-  height: 100%;
+  flex: 1 1 auto;
   width: 100%;
   min-width: 0;
   min-height: 0;
+  height: auto;
   overflow: hidden;
   background-image: none;
   background: var(--bg-base);
@@ -93,7 +94,20 @@
 }
 
 .chat-window--fullscreen {
-  height: 100%;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
+.chat-window__notice,
+.chat-window .chat-header,
+.chat-window .chat-dock-toolbar {
+  flex-shrink: 0;
+}
+
+.chat-window .message-input-form {
+  flex-shrink: 0;
+  margin-top: auto;
 }
 
 /* Panel — kompaktowy nagłówek */

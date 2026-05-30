@@ -43,9 +43,7 @@ export default function MessengerDock({
   const { t } = useTranslation();
   const roomBarRef = useRef(null);
   const openList = Object.keys(openRooms);
-  const isFullscreen = Boolean(
-    fullscreenRoom && (expandedRooms.includes(fullscreenRoom) || isCompact),
-  );
+  const isFullscreen = Boolean(fullscreenRoom);
   const useDockRail = !isCompact;
   /** Mobile: zakładki kanałów tylko w fullscreen czatu, nie na liście po minimalizacji. */
   const showRoomBar = isCompact

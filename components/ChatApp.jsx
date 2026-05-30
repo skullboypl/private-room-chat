@@ -1698,6 +1698,10 @@ export default function ChatApp() {
     if (pipRooms.includes(roomName)) closePiP(roomName);
     focusRoom(roomName);
 
+    setExpandedRooms((prev) => (
+      prev.includes(roomName) ? prev : [...prev, roomName]
+    ));
+
     if (isCompact) {
       setFullscreenRoom(roomName);
       return;

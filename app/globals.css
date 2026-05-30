@@ -174,3 +174,9 @@ input {
   min-height: 100vh;
   min-height: 100dvh;
 }
+
+.site-shell:has(.app--messenger-full) {
+  height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+}

@@ -1,5 +1,5 @@
 const { createServer } = require('http');
-const { parse } = require('url');
+const { parseUrl } = require('next/dist/shared/lib/router/utils/parse-url');
 const next = require('next');
 const { initSocketIO } = require('./lib/socket/server');
 
@@ -14,7 +14,7 @@ const handle = app.getRequestHandler();
 app.prepare().then(() => {
   const server = createServer(async (req, res) => {
     try {
-      const parsedUrl = parse(req.url, true);
+      const parsedUrl = parseUrl(req.url || '/');
       await handle(req, res, parsedUrl);
     } catch (err) {
       if (!quiet) console.error(err);

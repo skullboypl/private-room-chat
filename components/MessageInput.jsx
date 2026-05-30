@@ -2,55 +2,17 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
-import data from '@emoji-mart/data';
+
+const EmojiPickerPopover = dynamic(
+  () => import('@/components/EmojiPickerPopover'),
+  { ssr: false },
+);
 import { getRoomQuickEmoji, DEFAULT_QUICK_EMOJI } from '@/lib/roomEmoji';
 import { useTranslation } from '@/context/LocaleContext';
 import { translateRoomError } from '@/lib/i18n/systemMessages';
 import './MessageInput.css';
 
-const EmojiPicker = dynamic(
-  () => import('@emoji-mart/react').then((mod) => mod.default),
-  { ssr: false, loading: () => null },
-);
-
 const MAX_TEXTAREA_HEIGHT = 132;
-const PICKER_GAP = 8;
-const MIN_PICKER_HEIGHT = 140;
-const DEFAULT_PICKER_MAX = { full: 360, compact: 260 };
-
-function measureEmojiPickerLayout(formEl, compact) {
-  if (!formEl) {
-    return { below: false, maxHeight: compact ? DEFAULT_PICKER_MAX.compact : DEFAULT_PICKER_MAX.full };
-  }
-
-  const boundsEl = formEl.closest('.chat-window, .chat-pip');
-  const bounds = boundsEl?.getBoundingClientRect()
-    ?? { top: 0, bottom: window.innerHeight };
-  const formRect = formEl.getBoundingClientRect();
-  const defaultMax = compact ? DEFAULT_PICKER_MAX.compact : DEFAULT_PICKER_MAX.full;
-
-  const spaceAbove = formRect.top - bounds.top - PICKER_GAP;
-  const spaceBelow = bounds.bottom - formRect.bottom - PICKER_GAP;
-
-  let below = false;
-  let maxHeight = defaultMax;
-
-  if (spaceAbove >= MIN_PICKER_HEIGHT) {
-    below = false;
-    maxHeight = Math.min(defaultMax, spaceAbove);
-  } else if (spaceBelow >= MIN_PICKER_HEIGHT && spaceBelow > spaceAbove) {
-    below = true;
-    maxHeight = Math.min(defaultMax, spaceBelow);
-  } else {
-    below = spaceBelow > spaceAbove;
-    maxHeight = Math.max(
-      MIN_PICKER_HEIGHT,
-      Math.min(defaultMax, below ? spaceBelow : spaceAbove),
-    );
-  }
-
-  return { below, maxHeight: Math.floor(maxHeight) };
-}
 
 export default function MessageInput({
   onSendMessage,
@@ -65,12 +27,8 @@ export default function MessageInput({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [uploadError, setUploadError] = useState('');
   const [quickEmoji, setQuickEmoji] = useState(DEFAULT_QUICK_EMOJI);
-  const [emojiPickerBelow, setEmojiPickerBelow] = useState(false);
-  const [emojiPickerMaxHeight, setEmojiPickerMaxHeight] = useState(
-    compact ? DEFAULT_PICKER_MAX.compact : DEFAULT_PICKER_MAX.full,
-  );
   const formRef = useRef(null);
-  const emojiPickerRef = useRef(null);
+  const emojiToggleRef = useRef(null);
   const fileInputRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -168,48 +126,14 @@ export default function MessageInput({
     await sendImageFile(imageItem.getAsFile());
   };
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)
-          && !event.target.closest('.emoji-toggle-button')) {
-        setShowEmojiPicker(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+  const handleEmojiSelect = useCallback((unicode) => {
+    setMessage((prev) => prev + unicode);
   }, []);
-
-  useEffect(() => {
-    if (!showEmojiPicker) return undefined;
-
-    const updateLayout = () => {
-      const layout = measureEmojiPickerLayout(formRef.current, compact);
-      setEmojiPickerBelow(layout.below);
-      setEmojiPickerMaxHeight(layout.maxHeight);
-    };
-
-    updateLayout();
-    window.addEventListener('resize', updateLayout);
-    window.visualViewport?.addEventListener('resize', updateLayout);
-
-    const form = formRef.current;
-    const boundsEl = form?.closest('.chat-window, .chat-pip');
-    const resizeObserver = typeof ResizeObserver !== 'undefined' && boundsEl
-      ? new ResizeObserver(updateLayout)
-      : null;
-    resizeObserver?.observe(boundsEl);
-
-    return () => {
-      window.removeEventListener('resize', updateLayout);
-      window.visualViewport?.removeEventListener('resize', updateLayout);
-      resizeObserver?.disconnect();
-    };
-  }, [showEmojiPicker, compact]);
 
   return (
     <form
       ref={formRef}
-      className={`message-input-form${compact ? ' message-input-form--compact' : ''}`}
+      className={`message-input-form${compact ? ' message-input-form--compact' : ''}${showEmojiPicker ? ' message-input-form--emoji-open' : ''}`}
       onSubmit={handleSubmit}
     >
       <input ref={fileInputRef} type="file" accept="image/*" className="message-file-input" onChange={handleImageSelect} tabIndex={-1} aria-hidden="true" />
@@ -235,7 +159,14 @@ export default function MessageInput({
           rows={1}
         />
 
-        <button type="button" onClick={() => setShowEmojiPicker((p) => !p)} className="message-input-addon emoji-toggle-button" aria-label={t('chat.pickEmoji')}>
+        <button
+          ref={emojiToggleRef}
+          type="button"
+          onClick={() => setShowEmojiPicker((p) => !p)}
+          className="message-input-addon emoji-toggle-button"
+          aria-label={t('chat.pickEmoji')}
+          aria-expanded={showEmojiPicker}
+        >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
             <circle cx="12" cy="12" r="9" />
             <path d="M8 14s1.5 2 4 2 4-2 4-2" strokeLinecap="round" />
@@ -272,29 +203,15 @@ export default function MessageInput({
 
       {uploadError && <span className="message-upload-error" role="alert">{uploadError}</span>}
 
-      {showEmojiPicker && (
-        <div
-          className={`emoji-picker-container${emojiPickerBelow ? ' emoji-picker-container--below' : ''}`}
-          ref={emojiPickerRef}
-          style={{
-            '--emoji-picker-height': `${emojiPickerMaxHeight}px`,
-            maxHeight: `${emojiPickerMaxHeight}px`,
-          }}
-        >
-          <EmojiPicker
-            data={data}
-            onEmojiSelect={(emoji) => setMessage((prev) => prev + emoji.native)}
-            previewPosition="none"
-            theme="dark"
-            locale={lang === 'en' ? 'en' : 'pl'}
-            dynamicWidth={compact}
-            emojiButtonSize={compact ? 28 : 32}
-            emojiSize={compact ? 20 : 24}
-            maxFrequentRows={1}
-            perLine={compact ? undefined : 9}
-          />
-        </div>
-      )}
+      <EmojiPickerPopover
+        open={showEmojiPicker}
+        onClose={() => setShowEmojiPicker(false)}
+        onEmojiSelect={handleEmojiSelect}
+        anchorRef={emojiToggleRef}
+        compact={compact}
+        lang={lang}
+        ariaLabel={t('chat.pickEmoji')}
+      />
     </form>
   );
 }

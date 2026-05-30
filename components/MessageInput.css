@@ -126,27 +126,49 @@
   transform: translateY(1px);
 }
 
-.emoji-picker-container {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  right: 0.75rem;
-  z-index: 100;
-  width: fit-content;
-  max-width: calc(100% - 1.5rem);
-  max-height: min(360px, 50dvh);
+/* Portal — emoji-picker-element (https://github.com/nolanlawson/emoji-picker-element) */
+.emoji-picker-container--portal {
+  position: fixed;
+  z-index: 10200;
+  box-sizing: border-box;
+  pointer-events: auto;
+  touch-action: manipulation;
   overflow: hidden;
   border-radius: var(--radius-lg);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  animation: emojiPickerIn 0.15s ease-out;
 }
 
-.emoji-picker-container--below {
-  bottom: auto;
-  top: calc(100% + 8px);
+@keyframes emojiPickerIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
-.emoji-picker-container em-emoji-picker {
+.emoji-picker-container--portal emoji-picker {
   display: block;
-  height: var(--emoji-picker-height, 320px) !important;
-  max-height: 100% !important;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  --num-columns: 8;
+  --border-radius: var(--radius-lg);
+  --background: #1c1c28;
+  --border-color: rgba(255, 255, 255, 0.1);
+  --button-active-background: rgba(99, 102, 241, 0.25);
+  --button-hover-background: rgba(255, 255, 255, 0.06);
+  --input-border-color: rgba(255, 255, 255, 0.14);
+  --input-font-color: var(--text-primary, #e8e8ec);
+  --input-placeholder-color: var(--text-muted, #888);
+  --outline-color: var(--accent, #6366f1);
+}
+
+.emoji-picker-container--compact emoji-picker {
+  --num-columns: 7;
 }
 
 .message-input-form--compact .message-input-row {
@@ -184,16 +206,9 @@
   max-width: calc(100% - 1rem);
 }
 
-.message-input-form--compact .emoji-picker-container {
-  left: 0.5rem;
-  right: 0.5rem;
-  width: auto;
-  max-width: none;
-  max-height: min(260px, 45dvh);
-}
-
-.message-input-form--compact .emoji-picker-container em-emoji-picker {
-  width: 100% !important;
+.message-input-form--emoji-open {
+  position: relative;
+  z-index: 2;
 }
 
 @media (max-width: 720px) {

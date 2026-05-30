@@ -92,7 +92,7 @@ See [`.env.example`](.env.example) for all options.
 
 ## Stack
 
-Next.js 15 · React 19 · Socket.IO 4 · Web Crypto API · emoji-mart
+Next.js 15 · React 19 · Socket.IO 4 · Web Crypto API · emoji-picker-element
 
 ## License
 

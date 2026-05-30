@@ -127,8 +127,12 @@ export default function ChannelOptionsMenu({
     if (!open) return;
 
     const onPointerDown = (e) => {
-      if (menuRef.current?.contains(e.target)) return;
-      if (anchorRef?.current?.contains(e.target)) return;
+      const path = typeof e.composedPath === 'function' ? e.composedPath() : [e.target];
+      for (const node of path) {
+        if (!(node instanceof Node)) continue;
+        if (menuRef.current?.contains(node)) return;
+        if (anchorRef?.current?.contains(node)) return;
+      }
       onClose();
     };
 

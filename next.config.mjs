@@ -3,7 +3,7 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
-  transpilePackages: ['@emoji-mart/react', '@dicebear/core', '@dicebear/styles'],
+  transpilePackages: ['emoji-picker-element', '@dicebear/core', '@dicebear/styles'],
 };
 
 export default nextConfig;
